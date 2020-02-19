@@ -41,6 +41,7 @@ class Model(object):
         self.outputs = None
 
         self.loss = 0
+        self.acc = 0  # citation dnn accuracy
         self.accuracy = 0
         self.optimizer = None
         self.opt_op = None
@@ -401,9 +402,10 @@ class SampleAndAggregate(GeneralizedModel):
 
         # TF graph management
         self._loss()
+        self._acc()
 #        self._accuracy()
 #         self.loss = self.loss / tf.cast(self.batch_size, tf.float32)
-        print(self.loss)
+
         grads_and_vars = self.optimizer.compute_gradients(self.loss)
         clipped_grads_and_vars = [(tf.clip_by_value(grad, -5.0, 5.0) if grad is not None else None, var) 
                 for grad, var in grads_and_vars]
@@ -417,6 +419,10 @@ class SampleAndAggregate(GeneralizedModel):
 
         self.loss += self.link_pred_layer.loss(self.outputs1, self.outputs2) 
         tf.summary.scalar('loss', self.loss)
+
+    def _acc(self):
+        # citation dnn private function
+        self.acc = self.link_pred_layer.citation_acc(self.outputs1, self.outputs2)
 
     def _accuracy(self):
         # shape: [batch_size]

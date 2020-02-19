@@ -35,7 +35,7 @@ flags.DEFINE_string("model_size", "small", "Can be big or small; model specific 
 flags.DEFINE_string('train_prefix', '', 'name of the object file that stores the training data. must be specified.')
 
 # left to default values in main experiments 
-flags.DEFINE_integer('epochs', 10, 'number of epochs to train.')
+flags.DEFINE_integer('epochs', 100, 'number of epochs to train.')
 flags.DEFINE_float('dropout', 0.0, 'dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 0.0, 'weight for l2 loss on embedding matrix.')
 flags.DEFINE_integer('max_degree', 100, 'maximum node degree.')
@@ -315,7 +315,7 @@ def train(train_data, test_data=None):
             # Training step
 #            outs = sess.run([merged, model.opt_op, model.loss, model.ranks, model.aff_all, 
 #                    model.mrr, model.outputs1], feed_dict=feed_dict)
-            outs = sess.run([merged, model.opt_op, model.loss, model.outputs1], feed_dict=feed_dict)
+            outs = sess.run([merged, model.opt_op, model.loss, model.outputs1, model.acc], feed_dict=feed_dict)
             train_cost = outs[2]
             # print(iter, train_cost)  # batch loss
 
@@ -340,11 +340,13 @@ def train(train_data, test_data=None):
                 summary_writer.add_summary(outs[0], total_steps)
     
             # Print results
-            avg_time = (avg_time * total_steps + time.time() - t) / (total_steps + 1)
+            # avg_time = (avg_time * total_steps + time.time() - t) / (total_steps + 1)
+            avg_time = time.time() - t
 
             if total_steps % FLAGS.print_every == 0:
                 print("Iter:", '%04d' % iter, 
                       "train_loss=", "{:.5f}".format(train_cost),
+                      'train_acc=', '{:.5f}'.format(outs[4]),
 #                      "train_mrr=", "{:.5f}".format(train_mrr), 
 #                      "train_mrr_ema=", "{:.5f}".format(train_shadow_mrr), # exponential moving average
 #                      "val_loss=", "{:.5f}".format(val_cost),

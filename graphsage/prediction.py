@@ -101,6 +101,18 @@ class BipartiteEdgePredLayer(Layer):
         """
         return self.loss_fn(inputs1, inputs2)
 
+    def citation_acc(self, inputs1, inputs2):
+        acc = 0
+        model_input = tf.concat([inputs1, inputs2], 1)
+        self.node_pred = Dense(100, 1,
+                dropout=self.placeholders['dropout'],
+                act=lambda x : x)
+        self.node_preds = tf.round(self.node_pred(model_input))  # sigmoid output to 0/ 1
+        correct_pred = tf.equal(self.node_preds, self.placeholders['labels'])  # if prediction equals answer
+        acc += tf.reduce_mean(tf.cast(correct_pred, tf.float32))  # mean of acc
+
+        return acc
+
     def _xent_loss(self, inputs1, inputs2, neg_samples, hard_neg_samples=None):
         aff = self.affinity(inputs1, inputs2)
         neg_aff = self.neg_cost(inputs1, neg_samples, hard_neg_samples)
@@ -111,7 +123,7 @@ class BipartiteEdgePredLayer(Layer):
         loss = tf.reduce_sum(true_xent) + self.neg_sample_weights * tf.reduce_sum(negative_xent)
         return loss
 
-    def _citation_loss(self, inputs1, inputs2, hard_neg_samples=None):
+    def _citation_loss(self, inputs1, inputs2):
         loss = 0
         model_input = tf.concat([inputs1, inputs2], 1)
         self.node_pred = Dense(100, 1, 
