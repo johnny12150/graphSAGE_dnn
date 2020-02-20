@@ -4,7 +4,7 @@ from __future__ import print_function
 import numpy as np
 import pandas as pd
 import networkx as nx
-
+import random
 np.random.seed(123)
 
 
@@ -38,7 +38,7 @@ class EdgeMinibatchIterator(object):
         self.i = 0
 
         self.all_edge = pd.read_pickle('all_edge.pkl')
-        self.all_edge = self.all_edge[['head', 'tail']]
+        self.all_edge = self.all_edge[self.all_edge['rel'] == 0][['head','tail']]
         self.all_edge_array = np.array(self.all_edge)
 
         #        self.nodes = np.random.permutation(G.nodes())
@@ -130,6 +130,9 @@ class EdgeMinibatchIterator(object):
     def end(self):
         return self.batch_num * self.batch_size >= len(self.train_edges)
 
+    def test(self):
+        return len(self.train_edges)[:10], self.train_label[:10]
+
     def batch_feed_dict(self, batch_edges):
         batch1 = []
         batch2 = []
@@ -169,6 +172,50 @@ class EdgeMinibatchIterator(object):
         #        feed_dict.update({self.placeholders['labels']: labels})
 
         return feed_dict
+
+    #train幾個epoch就算一下accuracy
+    def val_shuffle(self):
+
+        ppedge = (list(set(np.unique(self.all_edge_array[:,0])).union(set(np.unique(self.all_edge_array[:,1])))))
+        sample_negative_edge = np.random.choice(ppedge, (4096,2))
+
+#        sample_negative_edge = np.random.randint(0,np.max(self.all_edge_array),(4096,2))
+        idx = np.random.randint(len(self.all_edge_array), size=4096)
+
+        sample_positive_edge = self.all_edge_array[idx,:]
+        positive_edge = set(map(tuple, sample_positive_edge))
+        sample_negative_edge = set(map(tuple, sample_negative_edge))
+        negative_edge = sample_negative_edge.difference(positive_edge)
+
+        positive_edge_label = np.c_[sample_positive_edge, np.ones(len(sample_positive_edge))]
+        negative_edge_label = np.c_[np.array(list(negative_edge)), np.zeros(len(negative_edge))]
+
+        data_edge = np.concatenate((positive_edge_label, negative_edge_label), axis=0)
+        np.random.shuffle(data_edge)
+        train_edges = data_edge[:, :2]
+        train_label = data_edge[:, -1]
+
+        batch_edges = train_edges
+
+        batch1 = []
+        batch2 = []
+        labels = []
+        i = 0
+
+        for node1, node2 in batch_edges:
+            batch1.append(self.id2idx[node1])
+            batch2.append(self.id2idx[node2])
+            labels.append(train_label[i])
+            i += 1
+
+        labels = np.vstack(labels)
+        feed_dict = dict()
+        feed_dict.update({self.placeholders['batch_size'] : len(batch_edges)})
+        feed_dict.update({self.placeholders['batch1']: batch1})
+        feed_dict.update({self.placeholders['batch2']: batch2})
+        feed_dict.update({self.placeholders['labels']: labels})
+
+        return feed_dict, labels
 
     def next_minibatch_feed_dict(self):
         start_idx = self.batch_num * self.batch_size
@@ -220,9 +267,13 @@ class EdgeMinibatchIterator(object):
         """
         #        self.train_edges = np.random.permutation(self.train_edges)
         #        self.nodes = np.random.permutation(self.nodes)
-        #        self.batch_num = 0
+        self.batch_num = 0
+        ppedge = (list(set(np.unique(self.all_edge_array[:,0])).union(set(np.unique(self.all_edge_array[:,1])))))
+        sample_edge = np.random.choice(ppedge, (len(self.all_edge_array),2))
 
-        sample_edge = np.random.randint(0, np.max(self.all_edge_array), (len(self.all_edge_array), 2))
+
+#        sample_edge = np.random.randint(0,np.max(self.all_edge_array),(len(self.all_edge_array),2))
+#        sample_edge = np.load('sample_edge.npy')
         self.positive_edge = set(map(tuple, self.all_edge_array))
         self.sample_negative_edge = set(map(tuple, sample_edge))
         self.negative_edge = self.sample_negative_edge.difference(self.positive_edge)
@@ -235,7 +286,6 @@ class EdgeMinibatchIterator(object):
         self.train_edges = self.data_edge[:, :2]
         self.train_label = self.data_edge[:, -1]
         self.i = 0
-        self.batch_num = 0
 
 
 class NodeMinibatchIterator(object):

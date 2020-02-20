@@ -5,6 +5,7 @@ import math
 
 import graphsage.layers as layers
 import graphsage.metrics as metrics
+from graphsage.layers import Dense
 import numpy as np
 
 from .prediction import BipartiteEdgePredLayer
@@ -193,7 +194,7 @@ class SampleAndAggregate(GeneralizedModel):
 
     def __init__(self, placeholders, features, adj, degrees,
             layer_infos, concat=True, aggregator_type="mean", 
-            model_size="small", identity_dim=0,
+            model_size="big", identity_dim=0,
             **kwargs):
         '''
         Args:
@@ -293,7 +294,7 @@ class SampleAndAggregate(GeneralizedModel):
         '''
 
     def aggregate(self, samples, input_features, dims, num_samples, support_sizes, batch_size=None,
-            aggregators=None, name=None, concat=False, model_size="small"):
+            aggregators=None, name=None, concat=False, model_size="big"):
         """ At each layer, aggregate hidden representations of neighbors to compute the hidden representations 
             at next layer.
         Args:
@@ -388,21 +389,23 @@ class SampleAndAggregate(GeneralizedModel):
 #                concat=self.concat, model_size=self.model_size)
 
         dim_mult = 2 if self.concat else 1
-        self.link_pred_layer = BipartiteEdgePredLayer(dim_mult*self.dims[-1],
-                dim_mult*self.dims[-1], self.placeholders, act=tf.nn.sigmoid, loss_fn='citation', 
-                bilinear_weights=False,
-                name='edge_predict')
+#        self.link_pred_layer = BipartiteEdgePredLayer(dim_mult*self.dims[-1],
+#                dim_mult*self.dims[-1], self.placeholders, act=tf.nn.sigmoid, loss_fn='citation',
+#                bilinear_weights=False,
+#                name='edge_predict')
 
         self.outputs1 = tf.nn.l2_normalize(self.outputs1, 1)
         self.outputs2 = tf.nn.l2_normalize(self.outputs2, 1)
 #        self.neg_outputs = tf.nn.l2_normalize(self.neg_outputs, 1)
+#         self.sigmoid_loss += tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(self.placeholders['labels'], self.node_preds, 10))
+
 
     def build(self):
         self._build()
 
         # TF graph management
         self._loss()
-        self._acc()
+        # self._acc()
 #        self._accuracy()
 #         self.loss = self.loss / tf.cast(self.batch_size, tf.float32)
 
@@ -416,8 +419,21 @@ class SampleAndAggregate(GeneralizedModel):
         for aggregator in self.aggregators:
             for var in aggregator.vars.values():
                 self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
+#        self.sigmoid_loss = self.link_pred_layer.loss(self.outputs1, self.outputs2)
+#        self.weight_decay_loss = self.loss
 
-        self.loss += self.link_pred_layer.loss(self.outputs1, self.outputs2) 
+        model_input = tf.concat([self.outputs1, self.outputs2], 1)
+        self.node_pred = Dense(200, 1)
+        self.node_preds = self.node_pred(model_input)
+        self.loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+            labels=self.placeholders['labels'],
+            logits=self.node_preds
+                    ))
+
+        predicted = tf.nn.sigmoid(self.node_preds)
+        correct_pred = tf.equal(tf.round(predicted), self.placeholders['labels'])
+        self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+
         tf.summary.scalar('loss', self.loss)
 
     def _acc(self):

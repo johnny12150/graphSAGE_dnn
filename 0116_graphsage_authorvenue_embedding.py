@@ -41,8 +41,8 @@ flags.DEFINE_float('weight_decay', 0.0, 'weight for l2 loss on embedding matrix.
 flags.DEFINE_integer('max_degree', 100, 'maximum node degree.')
 flags.DEFINE_integer('samples_1', 25, 'number of samples in layer 1')
 flags.DEFINE_integer('samples_2', 10, 'number of users samples in layer 2')
-flags.DEFINE_integer('dim_1', 25, 'Size of output dim (final is 2x this, if using concat)')
-flags.DEFINE_integer('dim_2', 25, 'Size of output dim (final is 2x this, if using concat)')
+flags.DEFINE_integer('dim_1', 50, 'Size of output dim (final is 2x this, if using concat)')
+flags.DEFINE_integer('dim_2', 50, 'Size of output dim (final is 2x this, if using concat)')
 flags.DEFINE_boolean('random_context', False, 'Whether to use random context or direct edges')
 flags.DEFINE_integer('neg_sample_size', 20, 'number of negative samples')
 flags.DEFINE_integer('batch_size', 4096, 'minibatch size.')
@@ -90,13 +90,10 @@ def load_data(prefix, normalize=True, load_walks=None, time_step=None, draw_G=Tr
     all_edge = pd.read_pickle('all_edge.pkl')
     
     all_edge = all_edge[['head','tail']]
-    
 
-    
     G = nx.DiGraph()
     G.add_edges_from(all_edge.values)
 
-                                                      
     id_map = dict(zip(G.nodes(), np.arange(len(G.nodes())))) 
     walks = G.edges()
     feats = None
@@ -160,6 +157,7 @@ def construct_placeholders():
         'labels' : tf.placeholder(tf.float32, shape=(None, 1), name='labels'),
         'batch1' : tf.placeholder(tf.int32, shape=(None), name='batch1'),
         'batch2' : tf.placeholder(tf.int32, shape=(None), name='batch2'),
+        'weight' : tf.placeholder(tf.float32, shape=(None), name='weight'),
         # negative samples for all nodes in the batch
         'neg_samples': tf.placeholder(tf.int32, shape=(None,),
             name='neg_sample_size'),
@@ -315,7 +313,8 @@ def train(train_data, test_data=None):
             # Training step
 #            outs = sess.run([merged, model.opt_op, model.loss, model.ranks, model.aff_all, 
 #                    model.mrr, model.outputs1], feed_dict=feed_dict)
-            outs = sess.run([merged, model.opt_op, model.loss, model.outputs1, model.acc], feed_dict=feed_dict)
+#             outs = sess.run([merged, model.opt_op, model.loss, model.outputs1, model.acc], feed_dict=feed_dict)
+            outs = sess.run([merged, model.opt_op, model.loss, model.outputs1], feed_dict=feed_dict)
             train_cost = outs[2]
             # print(iter, train_cost)  # batch loss
 
@@ -344,9 +343,14 @@ def train(train_data, test_data=None):
             avg_time = time.time() - t
 
             if total_steps % FLAGS.print_every == 0:
-                print("Iter:", '%04d' % iter, 
+                feed_dict_val, labels_val = minibatch.val_shuffle()
+#                print(feed_dict_val)
+                outs_val = sess.run([model.loss, model.node_preds, model.placeholders['labels'], model.accuracy], feed_dict=feed_dict_val)
+                accuracy = outs_val[3]
+
+                print("Iter:", '%04d' % iter,
                       "train_loss=", "{:.5f}".format(train_cost),
-                      'train_acc=', '{:.5f}'.format(outs[4]),
+                      'train_acc=', '{:.5f}'.format(accuracy),
 #                      "train_mrr=", "{:.5f}".format(train_mrr), 
 #                      "train_mrr_ema=", "{:.5f}".format(train_shadow_mrr), # exponential moving average
 #                      "val_loss=", "{:.5f}".format(val_cost),

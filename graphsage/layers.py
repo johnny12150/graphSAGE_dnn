@@ -83,7 +83,8 @@ class Dense(Layer):
         self.featureless = featureless
         self.bias = bias
         self.input_dim = input_dim
-        hidden_1_dim = 100
+        hidden_1_dim = 50
+        hidden_2_dim = 50
         self.hidden_1 = hidden_1_dim
         self.output_dim = output_dim
         
@@ -97,13 +98,18 @@ class Dense(Layer):
                                          dtype=tf.float32, 
                                          initializer=tf.contrib.layers.xavier_initializer(),
                                          regularizer=tf.contrib.layers.l2_regularizer(FLAGS.weight_decay))
-            self.vars['weights_1'] = tf.get_variable('weights_1', shape=(hidden_1_dim, output_dim),
+            self.vars['weights_1'] = tf.get_variable('weights_1', shape=(hidden_1_dim, hidden_2_dim),
+                                         dtype=tf.float32,
+                                         initializer=tf.contrib.layers.xavier_initializer(),
+                                         regularizer=tf.contrib.layers.l2_regularizer(FLAGS.weight_decay))
+            self.vars['weights_2'] = tf.get_variable('weights_2', shape=(hidden_2_dim, output_dim),
                                          dtype=tf.float32, 
                                          initializer=tf.contrib.layers.xavier_initializer(),
                                          regularizer=tf.contrib.layers.l2_regularizer(FLAGS.weight_decay))
 
             self.vars['bias'] = zeros([hidden_1_dim], name='bias')
-            self.vars['bias_1'] = zeros([output_dim], name='bias_1')
+            self.vars['bias_1'] = zeros([hidden_2_dim], name='bias_1')
+            self.vars['bias_2'] = zeros([output_dim], name='bias_2')
 
         if self.logging:
             self._log_vars()
@@ -111,14 +117,18 @@ class Dense(Layer):
     def _call(self, inputs):
         x = inputs
 
-        x = tf.nn.dropout(x, 1-self.dropout)
+#        x = tf.nn.dropout(x, 1-self.dropout)
 
         # transform
-        hidden = tf.matmul(x, self.vars['weights'])
-        hidden += self.vars['bias']
-        hidden = self.act(hidden)
-        output = tf.matmul(hidden, self.vars['weights_1'])
-        output += self.vars['bias_1']
-        output = tf.nn.sigmoid(output)
-        
+        hidden_1 = tf.matmul(x, self.vars['weights'])
+        hidden_1 += self.vars['bias']
+        hidden_1 = self.act(hidden_1)
+        hidden_2 = tf.matmul(hidden_1, self.vars['weights_1'])
+        hidden_2 += self.vars['bias_1']
+        hidden_2 = self.act(hidden_2)
+        hidden_3 = tf.matmul(hidden_2, self.vars['weights_2'])
+        hidden_3 += self.vars['bias_2']
+        output = hidden_3
+
+
         return output
