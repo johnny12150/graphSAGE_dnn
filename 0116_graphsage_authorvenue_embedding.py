@@ -30,12 +30,12 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
 #core params..
 flags.DEFINE_string('model', 'graphsage_mean', 'model names. See README for possible values.')  
-flags.DEFINE_float('learning_rate', 0.00001, 'initial learning rate.')
-flags.DEFINE_string("model_size", "small", "Can be big or small; model specific def'ns")
+flags.DEFINE_float('learning_rate', 0.001, 'initial learning rate.')
+flags.DEFINE_string("model_size", "big", "Can be big or small; model specific def'ns")
 flags.DEFINE_string('train_prefix', '', 'name of the object file that stores the training data. must be specified.')
 
 # left to default values in main experiments 
-flags.DEFINE_integer('epochs', 100, 'number of epochs to train.')
+flags.DEFINE_integer('epochs', 30, 'number of epochs to train.')
 flags.DEFINE_float('dropout', 0.0, 'dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 0.0, 'weight for l2 loss on embedding matrix.')
 flags.DEFINE_integer('max_degree', 100, 'maximum node degree.')
@@ -56,7 +56,7 @@ flags.DEFINE_integer('validate_iter', 500, "how often to run a validation miniba
 flags.DEFINE_integer('validate_batch_size', 256, "how many nodes per validation sample.")
 flags.DEFINE_integer('gpu', 0, "which gpu to use.")
 flags.DEFINE_integer('print_every', 100, "How often to print training info.")
-flags.DEFINE_integer('max_total_steps', 400, "Maximum total number of iterations")
+flags.DEFINE_integer('max_total_steps', 10000, "Maximum total number of iterations")
 
 os.environ["CUDA_VISIBLE_DEVICES"]=str(FLAGS.gpu)
 
@@ -119,7 +119,8 @@ def log_dir():
 def save_val_embeddings(sess, model, minibatch_iter, size, out_dir, mod=""):
     val_embeddings = []
     finished = False
-    seen = set([])
+#    seen = set([])
+    seen = []
     nodes = []
     iter_num = 0
     name = "val"
@@ -129,15 +130,17 @@ def save_val_embeddings(sess, model, minibatch_iter, size, out_dir, mod=""):
         outs_val = sess.run([model.outputs1], feed_dict=feed_dict_val)
         #ONLY SAVE FOR embeds1 because of planetoid
         for i, edge in enumerate(edges):
+            all_nodes.append(edge[0])
             if not edge[0] in seen:
                 val_embeddings.append(outs_val[-1][i,:])
                 nodes.append(edge[0])
-                seen.add(edge[0])
+                seen.append(edge[0])
+
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     val_embeddings = np.vstack(val_embeddings)
 
-    np.save(out_dir + '/emb_node.npy', np.array(nodes))
+    np.save(out_dir + '/emb_node.npy', np.array(seen))
 #    np.save(out_dir + name + mod + ".npy",  val_embeddings)
     np.save(out_dir + '/embedding.npy',  val_embeddings)
 #    with open(out_dir + name + mod + ".txt", "w") as fp:
