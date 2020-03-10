@@ -323,6 +323,7 @@ class SampleAndAggregate(GeneralizedModel):
         new_agg = aggregators is None
         if new_agg:
             aggregators = []
+        # 照layer來aggregate(最底層開始)
         for layer in range(len(num_samples)):
             if new_agg:
                 dim_mult = 2 if concat and (layer != 0) else 1
@@ -347,10 +348,10 @@ class SampleAndAggregate(GeneralizedModel):
                               num_samples[len(num_samples) - hop - 1], 
                               dim_mult*dims[layer]]
                 '''
-                neigh_dims = [<tf.Tensor 'mul_4:0' shape=<unknown> dtype=int32>, 10, 50]
+                neigh_dims = [<tf.Tensor 'mul_4:0' shape=<unknown> dtype=int32>, 10, 50] 第一次
+                             [<tf.Tensor 'mul_5:0' shape=<unknown> dtype=int32>, 25, 50] 第2次
                 '''
-                h = aggregator((hidden[hop],
-                                tf.reshape(hidden[hop + 1], neigh_dims)))
+                h = aggregator((hidden[hop], tf.reshape(hidden[hop + 1], neigh_dims)))
                 next_hidden.append(h)
             hidden = next_hidden
         return hidden[0], aggregators
@@ -369,8 +370,8 @@ class SampleAndAggregate(GeneralizedModel):
 #            unigrams=self.degrees.tolist()))
           
         # perform "convolution"
-        samples1, support_sizes1 = self.sample(self.inputs1, self.layer_infos)
-        samples2, support_sizes2 = self.sample(self.inputs2, self.layer_infos)
+        samples1, support_sizes1 = self.sample(self.inputs1, self.layer_infos)  # 2-hop neighbors
+        samples2, support_sizes2 = self.sample(self.inputs2, self.layer_infos)  # 1-hop neighbors
         num_samples = [layer_info.num_samples for layer_info in self.layer_infos] 
         '''
         num_samples=[25,10]
@@ -425,13 +426,17 @@ class SampleAndAggregate(GeneralizedModel):
         model_input = tf.concat([self.outputs1, self.outputs2], 1)
         self.node_pred = Dense(200, 1)
         self.node_preds = self.node_pred(model_input)
-        self.loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+        # self.loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+        #     labels=self.placeholders['labels'],
+        #     logits=self.node_preds
+        #             ))
+        self.loss += tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(
+            pos_weight=10,
             labels=self.placeholders['labels'],
             logits=self.node_preds
                     ))
-
-        predicted = tf.nn.sigmoid(self.node_preds)
-        correct_pred = tf.equal(tf.round(predicted), self.placeholders['labels'])
+        self.predicted = tf.nn.sigmoid(self.node_preds)
+        correct_pred = tf.equal(tf.round(self.predicted), self.placeholders['labels'])
         self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
         tf.summary.scalar('loss', self.loss)
