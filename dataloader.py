@@ -45,7 +45,7 @@ pvy = p_vy[['new_papr_id','new_venue_year_id']]
 paper_year = p_v[['new_papr_id','time_step','year']]
 pvy_new = pd.merge(paper_year,pvy)
 pvy_group = pvy_new.groupby('year')
-c = 8
+c = 8  # year_venue relation
 pvy_new = pd.DataFrame()
 for i in range(2011,2020):
     group_temp = pvy_group.get_group(i)
@@ -70,7 +70,7 @@ last_vy_id += 1
 vy_v = venue_year_venue.copy()
 vyv = vy_v[vy_v['time_step']<target_rank][['new_venue_year_id','new_venue_id']]
 vyv = vyv.reset_index(drop=True)
-rel = pd.DataFrame(np.ones(len(vyv))*7)
+rel = pd.DataFrame(np.ones(len(vyv))*7)  # venue id is 7
 vyv = pd.concat((vyv,rel),axis=1)
 vyv.columns = ['head','tail','rel']
 
@@ -143,7 +143,7 @@ pa_new = pa[~pa['new_author_id'].isin(bad_author)]
 pa_new.columns = ['head','tail']
 pa_new = pa_new.reset_index(drop=True)
 
-rel = pd.DataFrame(np.ones(len(pa_new)))
+rel = pd.DataFrame(np.ones(len(pa_new)))  # author relation is 1
 pa = pd.concat((pa_new,rel),axis=1)
 pa.columns = ['head','tail','rel']
 #%%

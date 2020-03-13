@@ -267,6 +267,7 @@ class SampleAndAggregate(GeneralizedModel):
             batch_size = self.batch_size
         samples = [inputs]
 
+        # fixme: support size是啥?
         # size of convolution support at each layer per node
         support_size = 1
         support_sizes = [support_size]
@@ -284,7 +285,6 @@ class SampleAndAggregate(GeneralizedModel):
             samples.append(tf.reshape(node, [support_size * batch_size,]))
             support_sizes.append(support_size)
 
-        return samples, support_sizes
         '''
         support_sizes = [1,10,250]
         samples = 
@@ -292,6 +292,7 @@ class SampleAndAggregate(GeneralizedModel):
         <tf.Tensor 'Reshape_1:0' shape=(?,) dtype=int32>, 
         <tf.Tensor 'Reshape_2:0' shape=(?,) dtype=int32>]
         '''
+        return samples, support_sizes
 
     def aggregate(self, samples, input_features, dims, num_samples, support_sizes, batch_size=None,
             aggregators=None, name=None, concat=False, model_size="big"):
@@ -329,7 +330,7 @@ class SampleAndAggregate(GeneralizedModel):
                 dim_mult = 2 if concat and (layer != 0) else 1
                 # aggregator at current layer
                 if layer == len(num_samples) - 1:
-                    aggregator = self.aggregator_cls(dim_mult*dims[layer], dims[layer+1], act=lambda x : x,
+                    aggregator = self.aggregator_cls(dim_mult*dims[layer], dims[layer+1], act=lambda x: x,
                             dropout=self.placeholders['dropout'], 
                             name=name, concat=concat, model_size=model_size)
                 else:
@@ -348,10 +349,12 @@ class SampleAndAggregate(GeneralizedModel):
                               num_samples[len(num_samples) - hop - 1], 
                               dim_mult*dims[layer]]
                 '''
+                Layer 0
                 neigh_dims = [<tf.Tensor 'mul_4:0' shape=<unknown> dtype=int32>, 10, 50] 第一次
                              [<tf.Tensor 'mul_5:0' shape=<unknown> dtype=int32>, 25, 50] 第2次
                 '''
-                h = aggregator((hidden[hop], tf.reshape(hidden[hop + 1], neigh_dims)))
+                # 自己的h0加上鄰居的h1
+                h = aggregator((hidden[hop], tf.reshape(hidden[hop + 1], neigh_dims)))  # input of _call()
                 next_hidden.append(h)
             hidden = next_hidden
         return hidden[0], aggregators
@@ -368,7 +371,8 @@ class SampleAndAggregate(GeneralizedModel):
 #            range_max=len(self.degrees),
 #            distortion=0.75,
 #            unigrams=self.degrees.tolist()))
-          
+
+        # todo 這裡的 input是 idx?
         # perform "convolution"
         samples1, support_sizes1 = self.sample(self.inputs1, self.layer_infos)  # 2-hop neighbors
         samples2, support_sizes2 = self.sample(self.inputs2, self.layer_infos)  # 1-hop neighbors
@@ -376,8 +380,8 @@ class SampleAndAggregate(GeneralizedModel):
         '''
         num_samples=[25,10]
         '''
-        self.outputs1, self.aggregators = self.aggregate(samples1, [self.features], self.dims, num_samples,
-                support_sizes1, concat=self.concat, model_size=self.model_size)
+
+        self.outputs1, self.aggregators = self.aggregate(samples1, [self.features], self.dims, num_samples, support_sizes1, concat=self.concat, model_size=self.model_size)
         self.outputs2, _ = self.aggregate(samples2, [self.features], self.dims, num_samples,
                 support_sizes2, aggregators=self.aggregators, concat=self.concat,
                 model_size=self.model_size)
@@ -407,6 +411,7 @@ class SampleAndAggregate(GeneralizedModel):
         # TF graph management
         self._loss()
         # self._acc()
+
 #        self._accuracy()
 #         self.loss = self.loss / tf.cast(self.batch_size, tf.float32)
 
@@ -414,6 +419,7 @@ class SampleAndAggregate(GeneralizedModel):
         clipped_grads_and_vars = [(tf.clip_by_value(grad, -5.0, 5.0) if grad is not None else None, var) 
                 for grad, var in grads_and_vars]
         self.grad, _ = clipped_grads_and_vars[0]
+        # apply_gradients使用計算得到的梯度來更新對應的variable
         self.opt_op = self.optimizer.apply_gradients(clipped_grads_and_vars)
 
     def _loss(self):

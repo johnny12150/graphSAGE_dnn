@@ -27,8 +27,10 @@ class MeanAggregator(Layer):
             name = ''
 
         with tf.variable_scope(self.name + name + '_vars'):
+            #  current node u
             self.vars['neigh_weights'] = glorot([neigh_input_dim, output_dim],
                                                         name='neigh_weights')
+            # neighbor node v
             self.vars['self_weights'] = glorot([input_dim, output_dim],
                                                         name='self_weights')
             '''
@@ -44,21 +46,19 @@ class MeanAggregator(Layer):
         self.input_dim = input_dim
         self.output_dim = output_dim
 
+    # 對父類class Layer(object)方法_call(inputs)的重寫
+    # https://www.itread01.com/content/1541901553.html
     def _call(self, inputs):
         self_vecs, neigh_vecs = inputs
         '''
-        neigh_vecs維度第一次是(?,10,50)，第二次是(?,25,50)，embedding是50維
+        neigh_vecs維度第一次是(?,10,50)，第二次是(?,25,50)，當embedding是50維
         第一層有25個samples，第二層10個samples，要從後面aggregate回來
         neigh_vecs = <tf.Tensor 'meanaggregator_1/dropout/mul:0' shape=(?, 10, 50) dtype=float32>
         self_vecs = <tf.Tensor 'meanaggregator_1/dropout_1/mul:0' shape=<unknown> dtype=float32>
         ''' 
         neigh_vecs = tf.nn.dropout(neigh_vecs, 1-self.dropout)
         self_vecs = tf.nn.dropout(self_vecs, 1-self.dropout)
-        neigh_means = tf.reduce_mean(neigh_vecs, axis=1)
-        '''
-        neigh_means維度是(?,50)
-        
-        '''
+        neigh_means = tf.reduce_mean(neigh_vecs, axis=1)  # 維度是(?,50)
         # [nodes] x [out_dim]
         from_neighs = tf.matmul(neigh_means, self.vars['neigh_weights'])
         '''
