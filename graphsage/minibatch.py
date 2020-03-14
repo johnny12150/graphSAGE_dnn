@@ -30,20 +30,22 @@ class EdgeMinibatchIterator(object):
         self.G = G
         self.nodes = G.nodes()
         self.id2idx = id2idx
-        self.id2idx2 = dict(zip(id2idx.values(), id2idx.keys()))
+        self.id2idx2 = dict(zip(id2idx.values(), id2idx.keys()))  # idx to id
         self.placeholders = placeholders
         self.batch_size = batch_size
         self.max_degree = max_degree
         self.batch_num = 0
-        self.labels = labels
+        # self.labels = labels
         self.i = 0
-
         self.all_edge = pd.read_pickle('all_edge.pkl')
-        self.all_edge = self.all_edge[self.all_edge['rel'] == 0][['head','tail']]
+        self.paper_venue = pd.read_pickle('paper_venue.pkl')
+        self.label_classes = self.paper_venue['new_venue_id'].unique()  # 43類
+        self.all_edge = self.all_edge[self.all_edge['rel'] == 0][['head', 'tail']]
         self.all_edge_array = np.array(self.all_edge)
 
         #        self.nodes = np.random.permutation(G.nodes())
         self.adj, self.deg = self.construct_adj()
+
         self.test_adj = self.construct_test_adj()
 
         #        if context_pairs is None:
@@ -145,7 +147,7 @@ class EdgeMinibatchIterator(object):
             labels.append(self.train_label[self.i])
             self.i += 1
 
-        #確保送進validation的data不要跟train的重複
+        # 確保送進validation的data不要跟train的重複
         self.batch1_data = batch1
         self.batch2_data = batch2
         self.labels_data = labels
@@ -180,26 +182,25 @@ class EdgeMinibatchIterator(object):
 
         return feed_dict
 
-    #train幾個epoch就算一下accuracy
+    # train幾個epoch就算一下accuracy
     def val_shuffle(self):
-        batch_data = np.zeros((len(self.batch_edges),2))
-        batch_data[:,0] = self.batch1_data
-        batch_data[:,1] = self.batch2_data
+        batch_data = np.zeros((len(self.batch_edges), 2))
+        batch_data[:, 0] = self.batch1_data
+        batch_data[:, 1] = self.batch2_data
         batch_data_edge = set(map(tuple, batch_data))
 
-        ppedge = (list(set(np.unique(self.all_edge_array[:,0])).union(set(np.unique(self.all_edge_array[:,1])))))
-        sample_negative_edge = np.random.choice(ppedge, (4096,2))
+        ppedge = (list(set(np.unique(self.all_edge_array[:, 0])).union(set(np.unique(self.all_edge_array[:, 1])))))
+        sample_negative_edge = np.random.choice(ppedge, (4096, 2))
 
 #        sample_negative_edge = np.random.randint(0,np.max(self.all_edge_array),(4096,2))
         idx = np.random.randint(len(self.all_edge_array), size=4096)
 
-        sample_positive_edge = self.all_edge_array[idx,:]
+        sample_positive_edge = self.all_edge_array[idx, :]
         positive_edge = set(map(tuple, sample_positive_edge))
         positive_edge_without_train = positive_edge.difference(batch_data_edge)
         sample_negative_edge = set(map(tuple, sample_negative_edge))
         negative_edge = sample_negative_edge.difference(positive_edge)
         negative_edge_without_train = negative_edge.difference(batch_data_edge)
-
 
         positive_edge_label = np.c_[np.array(list(positive_edge_without_train)), np.ones(len(positive_edge_without_train))]
         negative_edge_label = np.c_[np.array(list(negative_edge_without_train)), np.zeros(len(negative_edge_without_train))]
@@ -224,7 +225,7 @@ class EdgeMinibatchIterator(object):
 
         labels = np.vstack(labels)
         feed_dict = dict()
-        feed_dict.update({self.placeholders['batch_size'] : len(batch_edges)})
+        feed_dict.update({self.placeholders['batch_size']: len(batch_edges)})
         feed_dict.update({self.placeholders['batch1']: batch1})
         feed_dict.update({self.placeholders['batch2']: batch2})
         feed_dict.update({self.placeholders['labels']: labels})
@@ -295,13 +296,22 @@ class EdgeMinibatchIterator(object):
         self.sample_negative_edge = set(map(tuple, sample_edge))
         self.negative_edge = self.sample_negative_edge.difference(self.positive_edge)
 
-        self.positive_edge_label = np.c_[self.all_edge_array, np.ones(len(self.all_edge_array))]
-        self.negative_edge_label = np.c_[np.array(list(self.negative_edge)), np.zeros(len(self.negative_edge))]
-
-        self.data_edge = np.concatenate((self.positive_edge_label, self.negative_edge_label), axis=0)
-        np.random.shuffle(self.data_edge)
-        self.train_edges = self.data_edge[:, :2]
-        self.train_label = self.data_edge[:, -1]
+        # todo 做多分類版
+        node_classify = True
+        if not node_classify:
+            # assign true/ false, edge list + label, id還沒轉成idx
+            self.positive_edge_label = np.c_[self.all_edge_array, np.ones(len(self.all_edge_array))]
+            self.negative_edge_label = np.c_[np.array(list(self.negative_edge)), np.zeros(len(self.negative_edge))]
+            self.data_edge = np.concatenate((self.positive_edge_label, self.negative_edge_label), axis=0)
+            np.random.shuffle(self.data_edge)
+            self.train_edges = self.data_edge[:, :2]
+            self.train_label = self.data_edge[:, -1]
+        else:
+            # find each id class/ venue, 這裡還是舊的id, 沒有neg sample的問題
+            heads, counts = np.unique(self.all_edge_array[:, 0], return_counts=True)
+            head_venue = self.paper_venue[self.paper_venue['new_papr_id'].isin(heads)]['new_venue_id']
+            self.train_edges = self.all_edge_array
+            self.train_label = np.repeat(head_venue, counts)
         self.i = 0
 
     def before_train(self):
