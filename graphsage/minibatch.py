@@ -39,6 +39,7 @@ class EdgeMinibatchIterator(object):
         self.i = 0
         self.all_edge = pd.read_pickle('all_edge.pkl')
         self.paper_venue = pd.read_pickle('paper_venue.pkl')
+        self.node_classify = True
         self.label_classes = self.paper_venue['new_venue_id'].unique()  # 43類
         self.all_edge = self.all_edge[self.all_edge['rel'] == 0][['head', 'tail']]
         self.all_edge_array = np.array(self.all_edge)
@@ -202,13 +203,18 @@ class EdgeMinibatchIterator(object):
         negative_edge = sample_negative_edge.difference(positive_edge)
         negative_edge_without_train = negative_edge.difference(batch_data_edge)
 
-        positive_edge_label = np.c_[np.array(list(positive_edge_without_train)), np.ones(len(positive_edge_without_train))]
-        negative_edge_label = np.c_[np.array(list(negative_edge_without_train)), np.zeros(len(negative_edge_without_train))]
-
-        data_edge = np.concatenate((positive_edge_label, negative_edge_label), axis=0)
-        np.random.shuffle(data_edge)
-        train_edges = data_edge[:, :2]
-        train_label = data_edge[:, -1]
+        if not self.node_classify:
+            positive_edge_label = np.c_[np.array(list(positive_edge_without_train)), np.ones(len(positive_edge_without_train))]
+            negative_edge_label = np.c_[np.array(list(negative_edge_without_train)), np.zeros(len(negative_edge_without_train))]
+            data_edge = np.concatenate((positive_edge_label, negative_edge_label), axis=0)
+            np.random.shuffle(data_edge)
+            train_edges = data_edge[:, :2]
+            train_label = data_edge[:, -1]
+        else:
+            heads, counts = np.unique(np.array(list(positive_edge_without_train))[:, 0], return_counts=True)
+            head_venue = self.paper_venue[self.paper_venue['new_papr_id'].isin(heads)]['new_venue_id']
+            train_edges = np.array(list(positive_edge_without_train))
+            train_label = pd.get_dummies(np.repeat(head_venue, counts)).values
 
         batch_edges = train_edges
 
@@ -296,9 +302,7 @@ class EdgeMinibatchIterator(object):
         self.sample_negative_edge = set(map(tuple, sample_edge))
         self.negative_edge = self.sample_negative_edge.difference(self.positive_edge)
 
-        # todo 做多分類版
-        node_classify = True
-        if not node_classify:
+        if not self.node_classify:
             # assign true/ false, edge list + label, id還沒轉成idx
             self.positive_edge_label = np.c_[self.all_edge_array, np.ones(len(self.all_edge_array))]
             self.negative_edge_label = np.c_[np.array(list(self.negative_edge)), np.zeros(len(self.negative_edge))]
@@ -311,7 +315,8 @@ class EdgeMinibatchIterator(object):
             heads, counts = np.unique(self.all_edge_array[:, 0], return_counts=True)
             head_venue = self.paper_venue[self.paper_venue['new_papr_id'].isin(heads)]['new_venue_id']
             self.train_edges = self.all_edge_array
-            self.train_label = np.repeat(head_venue, counts)
+            # label轉 one hot
+            self.train_label = pd.get_dummies(np.repeat(head_venue, counts)).values
         self.i = 0
 
     def before_train(self):
