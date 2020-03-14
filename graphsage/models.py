@@ -372,8 +372,7 @@ class SampleAndAggregate(GeneralizedModel):
 #            distortion=0.75,
 #            unigrams=self.degrees.tolist()))
 
-        # todo 這裡的 input是 idx?
-        # perform "convolution"
+        # perform "convolution", 這裡的 input是 idx
         samples1, support_sizes1 = self.sample(self.inputs1, self.layer_infos)  # 2-hop neighbors
         samples2, support_sizes2 = self.sample(self.inputs2, self.layer_infos)  # 1-hop neighbors
         num_samples = [layer_info.num_samples for layer_info in self.layer_infos] 
@@ -430,20 +429,33 @@ class SampleAndAggregate(GeneralizedModel):
 #        self.weight_decay_loss = self.loss
 
         model_input = tf.concat([self.outputs1, self.outputs2], 1)
-        self.node_pred = Dense(200, 1)
-        self.node_preds = self.node_pred(model_input)
-        # self.loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-        #     labels=self.placeholders['labels'],
-        #     logits=self.node_preds
-        #             ))
-        self.loss += tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(
-            pos_weight=10,
-            labels=self.placeholders['labels'],
-            logits=self.node_preds
-                    ))
-        self.predicted = tf.nn.sigmoid(self.node_preds)
-        correct_pred = tf.equal(tf.round(self.predicted), self.placeholders['labels'])
-        self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+
+        node_pred = True
+        if not node_pred:
+            self.node_pred = Dense(200, 1)
+            self.node_preds = self.node_pred(model_input)
+            # self.loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+            #     labels=self.placeholders['labels'],
+            #     logits=self.node_preds
+            #             ))
+            self.loss += tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(
+                pos_weight=10,
+                labels=self.placeholders['labels'],
+                logits=self.node_preds))
+            self.predicted = tf.nn.sigmoid(self.node_preds)
+            correct_pred = tf.equal(tf.round(self.predicted), self.placeholders['labels'])
+            self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+        else:
+            self.node_pred = Dense(200, 40)
+            self.node_preds = self.node_pred(model_input)
+            self.loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
+                labels=self.placeholders['labels'],
+                logits=self.node_preds))
+            self.predicted = tf.nn.softmax(self.node_preds)
+            ans = self.placeholders['labels']
+            correct_pred = tf.cast(tf.math.argmax(self.predicted, 1) == tf.math.argmax(ans, 1), tf.int32)
+            # fixme 這應該算錯
+            self.accuracy = tf.reduce_sum(correct_pred) / tf.shape(self.predicted)[0]
 
         tf.summary.scalar('loss', self.loss)
 
