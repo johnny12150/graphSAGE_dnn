@@ -452,9 +452,14 @@ class SampleAndAggregate(GeneralizedModel):
                 labels=self.placeholders['labels'],
                 logits=self.node_preds))
             self.predicted = tf.nn.softmax(self.node_preds)
-            ans = self.placeholders['labels']
-            correct_pred = tf.cast(tf.math.argmax(self.predicted, 1) == tf.math.argmax(ans, 1), tf.int32)
+
             # fixme 這應該算錯
+            # ans = self.placeholders['labels']
+            # correct_pred = tf.cast(tf.math.argmax(self.predicted, 1) == tf.math.argmax(ans, 1), tf.int32)
+
+            ans = tf.reshape(tf.math.argmax(self.placeholders['labels'], 1), [tf.shape(self.predicted)[0], -1])
+            pred = tf.reshape(tf.math.argmax(self.predicted, 1), [tf.shape(self.predicted)[0], -1])
+            correct_pred = tf.cast(tf.equal(pred, ans), tf.int32)
             self.accuracy = tf.reduce_sum(correct_pred) / tf.shape(self.predicted)[0]
 
         tf.summary.scalar('loss', self.loss)

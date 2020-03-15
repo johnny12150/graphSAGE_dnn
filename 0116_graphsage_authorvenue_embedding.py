@@ -35,7 +35,7 @@ flags.DEFINE_string("model_size", "big", "Can be big or small; model specific de
 flags.DEFINE_string('train_prefix', '', 'name of the object file that stores the training data. must be specified.')
 
 # left to default values in main experiments 
-flags.DEFINE_integer('epochs', 30, 'number of epochs to train.')
+flags.DEFINE_integer('epochs', 10, 'number of epochs to train.')
 flags.DEFINE_float('dropout', 0.0, 'dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 0.0, 'weight for l2 loss on embedding matrix.')
 flags.DEFINE_integer('max_degree', 100, 'maximum node degree.')
@@ -53,7 +53,7 @@ flags.DEFINE_integer('identity_dim', 50, 'Set to positive value to use identity 
 flags.DEFINE_boolean('save_embeddings', True, 'whether to save embeddings for all nodes after training')
 flags.DEFINE_string('base_log_dir', 'embedding', 'base directory for logging and saving embeddings')
 flags.DEFINE_integer('validate_iter', 500, "how often to run a validation minibatch.")
-flags.DEFINE_integer('validate_batch_size', 256, "how many nodes per validation sample.")
+flags.DEFINE_integer('validate_batch_size', 4096, "how many nodes per validation sample.")
 flags.DEFINE_integer('gpu', 0, "which gpu to use.")
 flags.DEFINE_integer('print_every', 100, "How often to print training info.")
 flags.DEFINE_integer('max_total_steps', 10000, "Maximum total number of iterations")
@@ -118,6 +118,7 @@ def log_dir():
 
 def save_val_embeddings(sess, model, minibatch_iter, size, out_dir, mod=""):
     val_embeddings = []
+    all_nodes = []
     finished = False
 #    seen = set([])
     seen = []
@@ -131,16 +132,15 @@ def save_val_embeddings(sess, model, minibatch_iter, size, out_dir, mod=""):
         #ONLY SAVE FOR embeds1 because of planetoid
         for i, edge in enumerate(edges):
             all_nodes.append(edge[0])
-            if not edge[0] in seen:
-                val_embeddings.append(outs_val[-1][i,:])
-                nodes.append(edge[0])
-                seen.append(edge[0])
+            val_embeddings.append(outs_val[-1][i,:])
+            nodes.append(edge[0])
+            seen.append(edge[0])
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     val_embeddings = np.vstack(val_embeddings)
 
-    np.save(out_dir + '/emb_node.npy', np.array(seen))
+    np.save(out_dir + '/emb_node.npy', np.array(nodes))
 #    np.save(out_dir + name + mod + ".npy",  val_embeddings)
     np.save(out_dir + '/embedding.npy',  val_embeddings)
 #    with open(out_dir + name + mod + ".txt", "w") as fp:
@@ -150,14 +150,15 @@ def save_val_embeddings(sess, model, minibatch_iter, size, out_dir, mod=""):
 def evaluate(sess, model, minibatch_iter, size=None):
     t_test = time.time()
     feed_dict_val = minibatch_iter.val_feed_dict(size)
-    outs_val = sess.run([model.loss, model.ranks, model.mrr], 
-                        feed_dict=feed_dict_val)
+    outs_val = sess.run([model.loss], feed_dict=feed_dict_val)
+#    outs_val = sess.run([model.loss, model.ranks, model.mrr],
+#                        feed_dict=feed_dict_val)
     return outs_val[0], outs_val[1], outs_val[2], (time.time() - t_test)
 
 def construct_placeholders():
-    # Define placeholders
+    # Define placeholders shape
     placeholders = {
-        'labels' : tf.placeholder(tf.float32, shape=(None, 1), name='labels'),
+        'labels' : tf.placeholder(tf.float32, shape=(None, 40), name='labels'),
         'batch1' : tf.placeholder(tf.int32, shape=(None), name='batch1'),
         'batch2' : tf.placeholder(tf.int32, shape=(None), name='batch2'),
         'weight' : tf.placeholder(tf.float32, shape=(None), name='weight'),
@@ -174,6 +175,9 @@ def train(train_data, test_data=None):
     G = train_data[0]
     features = train_data[1]
     id_map = train_data[2]
+    # save id_map
+    with open('./id_map.pkl', 'wb') as file:
+        pickle.dump(id_map, file)
     labels = train_data[3]
     
     if not features is None:
@@ -281,7 +285,6 @@ def train(train_data, test_data=None):
     #config.gpu_options.per_process_gpu_memory_fraction = GPU_MEM_FRACTION
     config.allow_soft_placement = True
 
-    saver = tf.train.Saver()
     # Initialize session
     sess = tf.Session(config=config)
     merged = tf.summary.merge_all()
@@ -299,7 +302,8 @@ def train(train_data, test_data=None):
     epoch_val_costs = []
 
     train_adj_info = tf.assign(adj_info, minibatch.adj)
-    val_adj_info = tf.assign(adj_info, minibatch.test_adj)
+#    val_adj_info = tf.assign(adj_info, minibatch.test_adj)
+    val_adj_info = tf.assign(adj_info, minibatch.adj)
     for epoch in range(FLAGS.epochs): 
         minibatch.shuffle()
         total_steps = 0
@@ -314,21 +318,27 @@ def train(train_data, test_data=None):
 
             t = time.time()
             # Training step
-#            outs = sess.run([merged, model.opt_op, model.loss, model.ranks, model.aff_all, 
-#                    model.mrr, model.outputs1], feed_dict=feed_dict)
-#             outs = sess.run([merged, model.opt_op, model.loss, model.outputs1, model.acc], feed_dict=feed_dict)
-            outs = sess.run([merged, model.opt_op, model.loss, model.outputs1], feed_dict=feed_dict)
+            # outs = sess.run([merged, model.opt_op, model.loss, model.ranks, model.aff_all, model.mrr, model.outputs1], feed_dict=feed_dict)
+            outs = sess.run([merged, model.opt_op, model.loss, model.grad, model.node_preds, model.placeholders['labels'], model.outputs1, model.accuracy], feed_dict=feed_dict)
             train_cost = outs[2]
-            # print(iter, train_cost)  # batch loss
-
+            grad = outs[3]
+            node_pres = outs[4]
+            label = outs[5]
+            train_acc = outs[7]
 #            train_tmrr = outs[5]
 #            if train_shadow_mrr is None:
 #                train_shadow_mrr = train_mrr#
 #            else:
 #                train_shadow_mrr -= (1-0.99) * (train_shadow_mrr - train_mrr)
 
-#            if iter % FLAGS.validate_iter == 0:
-#                # Validation
+            if iter % FLAGS.validate_iter == 0:
+                feed_dict_val, labels_val = minibatch.val_shuffle()
+                outs_val = sess.run([model.loss, model.node_preds, model.placeholders['labels'], model.accuracy, model.predicted], feed_dict=feed_dict_val)
+                accuracy = outs_val[3]
+                true_value = outs_val[2][:10]
+                predicted_value = outs_val[4][:10]
+                loss = outs_val[0]
+                 # Validation
 #                sess.run(val_adj_info.op)
 #                val_cost, ranks, val_mrr, duration  = evaluate(sess, model, minibatch, size=FLAGS.validate_batch_size)
 #                sess.run(train_adj_info.op)
@@ -346,14 +356,10 @@ def train(train_data, test_data=None):
             avg_time = time.time() - t
 
             if total_steps % FLAGS.print_every == 0:
-                feed_dict_val, labels_val = minibatch.val_shuffle()
-#                print(feed_dict_val)
-                outs_val = sess.run([model.loss, model.node_preds, model.placeholders['labels'], model.accuracy], feed_dict=feed_dict_val)
-                accuracy = outs_val[3]
 
                 print("Iter:", '%04d' % iter,
                       "train_loss=", "{:.5f}".format(train_cost),
-                      'train_acc=', '{:.5f}'.format(accuracy),
+                      'train_acc=', "{:.5f}".format(train_acc),
 #                      "train_mrr=", "{:.5f}".format(train_mrr), 
 #                      "train_mrr_ema=", "{:.5f}".format(train_shadow_mrr), # exponential moving average
 #                      "val_loss=", "{:.5f}".format(val_cost),
@@ -372,12 +378,22 @@ def train(train_data, test_data=None):
             break
     
     print("Optimization Finished!")
-
+    all_vars = tf.trainable_variables()
+    # save variable, https://blog.csdn.net/u012436149/article/details/56665612
+    dense_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='dense_1_vars')
+    # saver = tf.train.Saver(all_vars[5:])
     # save model
+    saver = tf.train.Saver()
     # saver.save(sess, "F:/volume/0217graphsage/0106/model_output/model")
-    saver.save(sess, "./model_output/model")
-    print(os.path.abspath(os.getcwd()))
-    print(os.getcwd())
+    saver.save(sess, "./model_output/model")  # save entire model/ session
+
+    # print(all_vars[5:])
+    # print(dense_vars)
+    # saver.save(sess, "./var_output/model")
+
+    # current path
+    # print(os.path.abspath(os.getcwd()))
+    # print(os.getcwd())
 
     if FLAGS.save_embeddings:
         sess.run(val_adj_info.op)
