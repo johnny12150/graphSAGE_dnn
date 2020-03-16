@@ -382,6 +382,9 @@ def train(train_data, test_data=None):
         if total_steps > FLAGS.max_total_steps:
             break
     
+        print('val_accuracy : ' + str(accuracy) + ' val_loss : ' + (str(loss)))
+        print(' true_value : '+ str(true_value.T))
+        print(' predicted_value : '+ str(predicted_value.T))
     print("Optimization Finished!")
     all_vars = tf.trainable_variables()
     # save variable, https://blog.csdn.net/u012436149/article/details/56665612
