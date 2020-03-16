@@ -39,7 +39,7 @@ class EdgeMinibatchIterator(object):
         self.i = 0
         self.all_edge = pd.read_pickle('all_edge.pkl')
         self.paper_venue = pd.read_pickle('paper_venue.pkl')
-        self.node_classify = True
+        self.node_classify = False
         self.label_classes = self.paper_venue['new_venue_id'].unique()  # 43類
         self.all_edge = self.all_edge[self.all_edge['rel'] == 0][['head', 'tail']]
         self.all_edge_array = np.array(self.all_edge)

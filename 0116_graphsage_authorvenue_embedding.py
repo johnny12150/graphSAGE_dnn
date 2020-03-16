@@ -156,12 +156,17 @@ def evaluate(sess, model, minibatch_iter, size=None):
     return outs_val[0], outs_val[1], outs_val[2], (time.time() - t_test)
 
 def construct_placeholders():
+    node_pred = False
+    if not node_pred:
+        labels = 1
+    else:
+        labels = 40
     # Define placeholders shape
     placeholders = {
-        'labels' : tf.placeholder(tf.float32, shape=(None, 40), name='labels'),
-        'batch1' : tf.placeholder(tf.int32, shape=(None), name='batch1'),
-        'batch2' : tf.placeholder(tf.int32, shape=(None), name='batch2'),
-        'weight' : tf.placeholder(tf.float32, shape=(None), name='weight'),
+        'labels': tf.placeholder(tf.float32, shape=(None, labels), name='labels'),
+        'batch1': tf.placeholder(tf.int32, shape=(None), name='batch1'),
+        'batch2': tf.placeholder(tf.int32, shape=(None), name='batch2'),
+        'weight': tf.placeholder(tf.float32, shape=(None), name='weight'),
         # negative samples for all nodes in the batch
         'neg_samples': tf.placeholder(tf.int32, shape=(None,),
             name='neg_sample_size'),

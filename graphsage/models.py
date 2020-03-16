@@ -430,18 +430,21 @@ class SampleAndAggregate(GeneralizedModel):
 
         model_input = tf.concat([self.outputs1, self.outputs2], 1)
 
-        node_pred = True
+        node_pred = False
         if not node_pred:
             self.node_pred = Dense(200, 1)
             self.node_preds = self.node_pred(model_input)
-            # self.loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+            # todo 重算 loss, 手動給 neg的 loss比較小的 weight
+            # self.loss += tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(
+            #     pos_weight=10,
             #     labels=self.placeholders['labels'],
-            #     logits=self.node_preds
-            #             ))
-            self.loss += tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(
-                pos_weight=10,
-                labels=self.placeholders['labels'],
-                logits=self.node_preds))
+            #     logits=self.node_preds))
+
+            loss_logits = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.placeholders['labels'], logits=self.node_preds)
+            loss_weights = tf.ones([tf.shape(self.node_preds)[0]], tf.float32)
+            loss_weights = tf.where(self.placeholders['labels'] == 0, loss_weights, loss_weights*0.1)  # find id of negative sample
+            self.loss += tf.reduce_mean(tf.multiply(loss_weights, loss_logits))
+
             self.predicted = tf.nn.sigmoid(self.node_preds)
             correct_pred = tf.equal(tf.round(self.predicted), self.placeholders['labels'])
             self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
