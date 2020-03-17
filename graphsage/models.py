@@ -373,17 +373,15 @@ class SampleAndAggregate(GeneralizedModel):
 #            unigrams=self.degrees.tolist()))
 
         # perform "convolution", 這裡的 input是 idx
-        samples1, support_sizes1 = self.sample(self.inputs1, self.layer_infos)  # 2-hop neighbors
-        samples2, support_sizes2 = self.sample(self.inputs2, self.layer_infos)  # 1-hop neighbors
+        samples1, support_sizes1 = self.sample(self.inputs1, self.layer_infos)  # node itself
+        samples2, support_sizes2 = self.sample(self.inputs2, self.layer_infos)  # neighbor
         num_samples = [layer_info.num_samples for layer_info in self.layer_infos] 
         '''
         num_samples=[25,10]
         '''
 
         self.outputs1, self.aggregators = self.aggregate(samples1, [self.features], self.dims, num_samples, support_sizes1, concat=self.concat, model_size=self.model_size)
-        self.outputs2, _ = self.aggregate(samples2, [self.features], self.dims, num_samples,
-                support_sizes2, aggregators=self.aggregators, concat=self.concat,
-                model_size=self.model_size)
+        self.outputs2, _ = self.aggregate(samples2, [self.features], self.dims, num_samples, support_sizes2, aggregators=self.aggregators, concat=self.concat, model_size=self.model_size)
 
 #        neg_samples, neg_support_sizes = self.sample(self.neg_samples, self.layer_infos,
 #            FLAGS.neg_sample_size)
@@ -415,8 +413,7 @@ class SampleAndAggregate(GeneralizedModel):
 #         self.loss = self.loss / tf.cast(self.batch_size, tf.float32)
 
         grads_and_vars = self.optimizer.compute_gradients(self.loss)
-        clipped_grads_and_vars = [(tf.clip_by_value(grad, -5.0, 5.0) if grad is not None else None, var) 
-                for grad, var in grads_and_vars]
+        clipped_grads_and_vars = [(tf.clip_by_value(grad, -5.0, 5.0) if grad is not None else None, var) for grad, var in grads_and_vars]
         self.grad, _ = clipped_grads_and_vars[0]
         # apply_gradients使用計算得到的梯度來更新對應的variable
         self.opt_op = self.optimizer.apply_gradients(clipped_grads_and_vars)
@@ -425,21 +422,15 @@ class SampleAndAggregate(GeneralizedModel):
         for aggregator in self.aggregators:
             for var in aggregator.vars.values():
                 self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
-#        self.sigmoid_loss = self.link_pred_layer.loss(self.outputs1, self.outputs2)
-#        self.weight_decay_loss = self.loss
+        # self.sigmoid_loss = self.link_pred_layer.loss(self.outputs1, self.outputs2)
+        # self.weight_decay_loss = self.loss
 
-        model_input = tf.concat([self.outputs1, self.outputs2], 1)
-
-        node_pred = False
+        node_pred = True
         if not node_pred:
+            model_input = tf.concat([self.outputs1, self.outputs2], 1)
             self.node_pred = Dense(200, 1)
             self.node_preds = self.node_pred(model_input)
-            # todo 重算 loss, 手動給 neg的 loss比較小的 weight
-            # self.loss += tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(
-            #     pos_weight=10,
-            #     labels=self.placeholders['labels'],
-            #     logits=self.node_preds))
-
+            # 重算 loss, 手動給 neg的 loss比較小的 weight
             loss_logits = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.placeholders['labels'], logits=self.node_preds)
             loss_weights = tf.ones([tf.shape(self.node_preds)[0]], tf.float32)
             loss_weights = tf.where(self.placeholders['labels'] == 0, loss_weights, loss_weights*0.1)  # find id of negative sample
@@ -449,14 +440,15 @@ class SampleAndAggregate(GeneralizedModel):
             correct_pred = tf.equal(tf.round(self.predicted), self.placeholders['labels'])
             self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
         else:
-            self.node_pred = Dense(200, 40)
-            self.node_preds = self.node_pred(model_input)
+            # fixme node prediction應該只有一組emb
+            self.node_pred = Dense(100, 40)
+            self.node_preds = self.node_pred(self.outputs1)
             self.loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
                 labels=self.placeholders['labels'],
                 logits=self.node_preds))
             self.predicted = tf.nn.softmax(self.node_preds)
 
-            # fixme 這應該算錯
+            # 這應該算錯
             # ans = self.placeholders['labels']
             # correct_pred = tf.cast(tf.math.argmax(self.predicted, 1) == tf.math.argmax(ans, 1), tf.int32)
 

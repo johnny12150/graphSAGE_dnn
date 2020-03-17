@@ -39,7 +39,7 @@ class EdgeMinibatchIterator(object):
         self.i = 0
         self.all_edge = pd.read_pickle('all_edge.pkl')
         self.paper_venue = pd.read_pickle('paper_venue.pkl')
-        self.node_classify = False
+        self.node_classify = True
         self.label_classes = self.paper_venue['new_venue_id'].unique()  # 43類
         self.all_edge = self.all_edge[self.all_edge['rel'] == 0][['head', 'tail']]
         self.all_edge_array = np.array(self.all_edge)
@@ -293,7 +293,7 @@ class EdgeMinibatchIterator(object):
         #        self.nodes = np.random.permutation(self.nodes)
         self.batch_num = 0
         ppedge = (list(set(np.unique(self.all_edge_array[:,0])).union(set(np.unique(self.all_edge_array[:,1])))))  # all paper id
-        neg_size = 2  # default is 2
+        neg_size = 10  # default is 2
         sample_edge = np.random.choice(ppedge, (len(self.all_edge_array) * neg_size, 2))
 
 #        sample_edge = np.random.randint(0,np.max(self.all_edge_array),(len(self.all_edge_array),2))

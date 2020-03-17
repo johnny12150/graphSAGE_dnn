@@ -39,8 +39,8 @@ flags.DEFINE_integer('epochs', 10, 'number of epochs to train.')
 flags.DEFINE_float('dropout', 0.0, 'dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 0.0, 'weight for l2 loss on embedding matrix.')
 flags.DEFINE_integer('max_degree', 100, 'maximum node degree.')
-flags.DEFINE_integer('samples_1', 25, 'number of samples in layer 1')
-flags.DEFINE_integer('samples_2', 10, 'number of users samples in layer 2')
+flags.DEFINE_integer('samples_1', 25, 'number of samples in layer 1')  # 2-hop neighbors
+flags.DEFINE_integer('samples_2', 10, 'number of users samples in layer 2')  # 1-hop neighbors
 flags.DEFINE_integer('dim_1', 50, 'Size of output dim (final is 2x this, if using concat)')
 flags.DEFINE_integer('dim_2', 50, 'Size of output dim (final is 2x this, if using concat)')
 flags.DEFINE_boolean('random_context', False, 'Whether to use random context or direct edges')
@@ -156,7 +156,7 @@ def evaluate(sess, model, minibatch_iter, size=None):
     return outs_val[0], outs_val[1], outs_val[2], (time.time() - t_test)
 
 def construct_placeholders():
-    node_pred = False
+    node_pred = True
     if not node_pred:
         labels = 1
     else:
@@ -168,10 +168,9 @@ def construct_placeholders():
         'batch2': tf.placeholder(tf.int32, shape=(None), name='batch2'),
         'weight': tf.placeholder(tf.float32, shape=(None), name='weight'),
         # negative samples for all nodes in the batch
-        'neg_samples': tf.placeholder(tf.int32, shape=(None,),
-            name='neg_sample_size'),
+        'neg_samples': tf.placeholder(tf.int32, shape=(None,), name='neg_sample_size'),
         'dropout': tf.placeholder_with_default(0., shape=(), name='dropout'),
-        'batch_size' : tf.placeholder(tf.int32, name='batch_size'),
+        'batch_size': tf.placeholder(tf.int32, name='batch_size'),
     }
     return placeholders
 
@@ -383,8 +382,8 @@ def train(train_data, test_data=None):
             break
     
         print('val_accuracy : ' + str(accuracy) + ' val_loss : ' + (str(loss)))
-        print(' true_value : '+ str(true_value.T))
-        print(' predicted_value : '+ str(predicted_value.T))
+        print(' true_value : ' + str(true_value.T))
+        print(' predicted_value : ' + str(predicted_value.T))
     print("Optimization Finished!")
     all_vars = tf.trainable_variables()
     # save variable, https://blog.csdn.net/u012436149/article/details/56665612
