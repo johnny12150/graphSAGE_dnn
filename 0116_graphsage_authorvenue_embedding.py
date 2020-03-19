@@ -88,8 +88,12 @@ def load_data(prefix, normalize=True, load_walks=None, time_step=None, draw_G=Tr
 #    assert time_step != None, "load_data-- time_step can't None!"
     
     all_edge = pd.read_pickle('all_edge.pkl')
-    
+    # pv = pd.read_pickle('F:/volume/jicai/preprocess/edge/paper_venue.pkl')
+    # 改成不考慮時間的 venue
+    # pv = pv[pv['time_step'] < 284][['new_papr_id', 'new_venue_id']]
+    # all_edge = all_edge[all_edge['rel'].isin([0, 1])]
     all_edge = all_edge[['head','tail']]
+    # all_edge = np.vstack((all_edge.values, pv.values))
 
     G = nx.DiGraph()
     G.add_edges_from(all_edge.values)
@@ -342,6 +346,7 @@ def train(train_data, test_data=None):
                 true_value = outs_val[2][:10]
                 predicted_value = outs_val[4][:10]
                 loss = outs_val[0]
+
                  # Validation
 #                sess.run(val_adj_info.op)
 #                val_cost, ranks, val_mrr, duration  = evaluate(sess, model, minibatch, size=FLAGS.validate_batch_size)
@@ -373,7 +378,6 @@ def train(train_data, test_data=None):
 
             iter += 1
             total_steps += 1
-            
 
             if total_steps > FLAGS.max_total_steps:
                 break
@@ -382,8 +386,8 @@ def train(train_data, test_data=None):
             break
     
         print('val_accuracy : ' + str(accuracy) + ' val_loss : ' + (str(loss)))
-        print(' true_value : ' + str(true_value.T))
-        print(' predicted_value : ' + str(predicted_value.T))
+        print('true_value : ' + str(true_value.T))
+        print('predicted_value : ' + str(predicted_value.T))
     print("Optimization Finished!")
     all_vars = tf.trainable_variables()
     # save variable, https://blog.csdn.net/u012436149/article/details/56665612
@@ -391,7 +395,6 @@ def train(train_data, test_data=None):
     # saver = tf.train.Saver(all_vars[5:])
     # save model
     saver = tf.train.Saver()
-    # saver.save(sess, "F:/volume/0217graphsage/0106/model_output/model")
     saver.save(sess, "./model_output/model")  # save entire model/ session
 
     # print(all_vars[5:])
