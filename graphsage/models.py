@@ -181,10 +181,10 @@ class GeneralizedModel(Model):
 # SAGEInfo is a namedtuple that specifies the parameters 
 # of the recursive GraphSAGE layers
 SAGEInfo = namedtuple("SAGEInfo",
-    ['layer_name', # name of the layer (to get feature embedding etc.)
-     'neigh_sampler', # callable neigh_sampler constructor
+    ['layer_name',  # name of the layer (to get feature embedding etc.)
+     'neigh_sampler',  # callable neigh_sampler constructor
      'num_samples',
-     'output_dim' # the output (i.e., hidden) dimension
+     'output_dim'  # the output (i.e., hidden) dimension
     ])
 
 class SampleAndAggregate(GeneralizedModel):
@@ -267,22 +267,22 @@ class SampleAndAggregate(GeneralizedModel):
             batch_size = self.batch_size
         samples = [inputs]
 
-        # fixme: support size是啥?
+        # support size => the number of nodes to gather information from for each layer.
         # size of convolution support at each layer per node
         support_size = 1
         support_sizes = [support_size]
+        # https://medium.com/@yenhao0218/%E6%B7%B1%E5%BA%A6%E5%9C%96%E5%BD%A2%E5%8D%B7%E7%A9%8D%E7%B6%B2%E8%B7%AF-deep-learning-on-graphs-with-graph-convolutional-networks-part-1-69d98fe17995
         for k in range(len(layer_infos)):
             t = len(layer_infos) - k - 1
-            support_size *= layer_infos[t].num_samples
-            sampler = layer_infos[t].neigh_sampler
+            support_size *= layer_infos[t].num_samples  # 1, 2 hop sample量
+            sampler = layer_infos[t].neigh_sampler  # UniformNeighborSampler
             node = sampler((samples[k], layer_infos[t].num_samples))
             '''
             這裡才用到UniformNeighborSampler裡的_call function，input是一個node
-
             [<tf.Tensor 'FixedUnigramCandidateSampler:0' shape=(20,) dtype=int64>, 
             <tf.Tensor 'Reshape_11:0' shape=(200,) dtype=int32>]
             '''
-            samples.append(tf.reshape(node, [support_size * batch_size,]))
+            samples.append(tf.reshape(node, [support_size * batch_size, ]))
             support_sizes.append(support_size)
 
         '''
@@ -314,7 +314,7 @@ class SampleAndAggregate(GeneralizedModel):
         if batch_size is None:
             batch_size = self.batch_size
 
-        # length: number of layers + 1
+        # length: number of layers + 1, 根據node id找embedding
         hidden = [tf.nn.embedding_lookup(input_features, node_samples) for node_samples in samples]
         '''
         第一次hidden shape = (?,50) (?,50)
@@ -425,7 +425,7 @@ class SampleAndAggregate(GeneralizedModel):
         # self.sigmoid_loss = self.link_pred_layer.loss(self.outputs1, self.outputs2)
         # self.weight_decay_loss = self.loss
 
-        node_pred = True
+        node_pred = False
         if not node_pred:
             model_input = tf.concat([self.outputs1, self.outputs2], 1)
             self.node_pred = Dense(200, 1)
@@ -433,14 +433,27 @@ class SampleAndAggregate(GeneralizedModel):
             # 重算 loss, 手動給 neg的 loss比較小的 weight
             loss_logits = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.placeholders['labels'], logits=self.node_preds)
             loss_weights = tf.ones([tf.shape(self.node_preds)[0]], tf.float32)
+            # fixme 這是錯的
             loss_weights = tf.where(self.placeholders['labels'] == 0, loss_weights, loss_weights*0.1)  # find id of negative sample
-            self.loss += tf.reduce_mean(tf.multiply(loss_weights, loss_logits))
+            # loss_weights = tf.where(tf.equal(self.placeholders['labels'], 0), loss_weights, loss_weights*0.1)
 
+            self.loss += tf.reduce_mean(tf.multiply(loss_weights, loss_logits))
             self.predicted = tf.nn.sigmoid(self.node_preds)
-            correct_pred = tf.equal(tf.round(self.predicted), self.placeholders['labels'])
+            # todo 算 pos, neg的 acc
+            pos_index = tf.where(tf.equal(self.placeholders['labels'], 1))  # element-wise comparison
+            neg_index = tf.where(tf.equal(self.placeholders['labels'], 0))
+            pos_ = tf.gather_nd(self.predicted, pos_index)
+            pos_ans = tf.gather_nd(self.placeholders['labels'], pos_index)
+            neg_ = tf.gather_nd(self.predicted, neg_index)
+            neg_ans = tf.gather_nd(self.placeholders['labels'], neg_index)
+            correct_pred = tf.equal(tf.round(pos_), pos_ans)
+            # correct_pred = tf.equal(tf.round(neg_), neg_ans)
             self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+
+            # correct_pred = tf.equal(tf.round(self.predicted), self.placeholders['labels'])
+            # self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
         else:
-            # fixme node prediction應該只有一組emb
+            # node prediction應該只有一組emb
             self.node_pred = Dense(100, 40)
             self.node_preds = self.node_pred(self.outputs1)
             self.loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
