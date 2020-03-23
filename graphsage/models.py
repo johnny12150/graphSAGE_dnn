@@ -432,21 +432,22 @@ class SampleAndAggregate(GeneralizedModel):
             self.node_preds = self.node_pred(model_input)
             # 重算 loss, 手動給 neg的 loss比較小的 weight
             loss_logits = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.placeholders['labels'], logits=self.node_preds)
-            loss_weights = tf.ones([tf.shape(self.node_preds)[0]], tf.float32)
+            loss_weights = tf.ones([tf.shape(self.node_preds)[0], 1], tf.float32)
             # fixme 這是錯的
-            loss_weights = tf.where(self.placeholders['labels'] == 0, loss_weights, loss_weights*0.1)  # find id of negative sample
-            # loss_weights = tf.where(tf.equal(self.placeholders['labels'], 0), loss_weights, loss_weights*0.1)
+            # loss_weights = tf.where(self.placeholders['labels'] == 0, loss_weights, loss_weights*0.1)
+            loss_weights = tf.where(tf.equal(self.placeholders['labels'], 0), loss_weights*10, loss_weights)
 
             self.loss += tf.reduce_mean(tf.multiply(loss_weights, loss_logits))
             self.predicted = tf.nn.sigmoid(self.node_preds)
-            # todo 算 pos, neg的 acc
+            # positive sample accuracy
             pos_index = tf.where(tf.equal(self.placeholders['labels'], 1))  # element-wise comparison
             neg_index = tf.where(tf.equal(self.placeholders['labels'], 0))
-            pos_ = tf.gather_nd(self.predicted, pos_index)
+            pos_ = tf.gather_nd(self.predicted, pos_index)  # select tensor by index
             pos_ans = tf.gather_nd(self.placeholders['labels'], pos_index)
-            neg_ = tf.gather_nd(self.predicted, neg_index)
-            neg_ans = tf.gather_nd(self.placeholders['labels'], neg_index)
             correct_pred = tf.equal(tf.round(pos_), pos_ans)
+            # negative sample accuracy
+            # neg_ = tf.gather_nd(self.predicted, neg_index)
+            # neg_ans = tf.gather_nd(self.placeholders['labels'], neg_index)
             # correct_pred = tf.equal(tf.round(neg_), neg_ans)
             self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
