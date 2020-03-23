@@ -425,7 +425,7 @@ class SampleAndAggregate(GeneralizedModel):
         # self.sigmoid_loss = self.link_pred_layer.loss(self.outputs1, self.outputs2)
         # self.weight_decay_loss = self.loss
 
-        node_pred = False
+        node_pred = FLAGS.node_pred
         if not node_pred:
             model_input = tf.concat([self.outputs1, self.outputs2], 1)
             self.node_pred = Dense(200, 1)

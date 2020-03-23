@@ -48,6 +48,7 @@ flags.DEFINE_integer('neg_sample_size', 20, 'number of negative samples')
 flags.DEFINE_integer('batch_size', 4096, 'minibatch size.')
 flags.DEFINE_integer('n2v_test_epochs', 1, 'Number of new SGD epochs for n2v.')
 flags.DEFINE_integer('identity_dim', 50, 'Set to positive value to use identity embedding features of that dimension. Default 0.')
+flags.DEFINE_boolean('node_pred', True, 'Which task to perform')
 
 #logging, saving, validation settings etc.
 flags.DEFINE_boolean('save_embeddings', True, 'whether to save embeddings for all nodes after training')
@@ -160,7 +161,7 @@ def evaluate(sess, model, minibatch_iter, size=None):
     return outs_val[0], outs_val[1], outs_val[2], (time.time() - t_test)
 
 def construct_placeholders():
-    node_pred = True
+    node_pred = FLAGS.node_pred
     if not node_pred:
         labels = 1
     else:
@@ -386,8 +387,8 @@ def train(train_data, test_data=None):
             break
     
         print('val_accuracy : ' + str(accuracy) + ' val_loss : ' + (str(loss)))
-        print('true_value : ' + str(true_value.T))
-        print('predicted_value : ' + str(predicted_value.T))
+        # print('true_value : ' + str(true_value.T))
+        # print('predicted_value : ' + str(predicted_value.T))
     print("Optimization Finished!")
     all_vars = tf.trainable_variables()
     # save variable, https://blog.csdn.net/u012436149/article/details/56665612

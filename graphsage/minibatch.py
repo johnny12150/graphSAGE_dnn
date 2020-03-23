@@ -3,9 +3,12 @@ from __future__ import print_function
 
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 import networkx as nx
 import random
 np.random.seed(123)
+flags = tf.app.flags
+FLAGS = flags.FLAGS
 
 
 class EdgeMinibatchIterator(object):
@@ -30,7 +33,7 @@ class EdgeMinibatchIterator(object):
         self.G = G
         self.nodes = G.nodes()
         self.id2idx = id2idx
-        self.id2idx2 = dict(zip(id2idx.values(), id2idx.keys()))  # idx to id
+        self.idx2id = dict(zip(id2idx.values(), id2idx.keys()))  # idx to id
         self.placeholders = placeholders
         self.batch_size = batch_size
         self.max_degree = max_degree
@@ -39,7 +42,7 @@ class EdgeMinibatchIterator(object):
         self.i = 0
         self.all_edge = pd.read_pickle('all_edge.pkl')
         self.paper_venue = pd.read_pickle('paper_venue.pkl')
-        self.node_classify = True
+        self.node_classify = FLAGS.node_pred
         self.label_classes = self.paper_venue['new_venue_id'].unique()  # 43類
         self.all_edge = self.all_edge[self.all_edge['rel'] == 0][['head', 'tail']]
         self.all_edge_array = np.array(self.all_edge)
@@ -166,20 +169,16 @@ class EdgeMinibatchIterator(object):
     def val_batch_feed_dict(self, batch_edges):
         batch1 = []
         batch2 = []
-        labels = []
 
         for node1, node2 in batch_edges:
             batch1.append(self.id2idx[node1])
             batch2.append(self.id2idx[node2])
-            #            labels.append(self.train_label[self.i])
             self.i += 1
 
-        #        labels = np.vstack(labels)
         feed_dict = dict()
         feed_dict.update({self.placeholders['batch_size']: len(batch_edges)})
         feed_dict.update({self.placeholders['batch1']: batch1})
         feed_dict.update({self.placeholders['batch2']: batch2})
-        #        feed_dict.update({self.placeholders['labels']: labels})
 
         return feed_dict
 
@@ -259,19 +258,17 @@ class EdgeMinibatchIterator(object):
 
     def incremental_val_feed_dict(self, size, iter_num):
         edge_list = self.val_edges
-        val_edges = edge_list[iter_num * size:min((iter_num + 1) * size,
-                                                  len(edge_list))]
+        val_edges = edge_list[iter_num * size:min((iter_num + 1) * size, len(edge_list))]
 
         # return self.batch_feed_dict(val_edges), (iter_num + 1) * size >= len(self.val_edges), self.id2idx[val_edges]
         return self.batch_feed_dict(val_edges), (iter_num + 1) * size >= len(self.val_edges), val_edges
 
     def incremental_embed_feed_dict(self, size, iter_num):
-        #        node_list = np.random.permutation(self.nodes)
+        #  node_list = np.random.permutation(self.nodes)
         node_list = np.arange(0, len(self.nodes))
-        val_nodes = node_list[iter_num * size:min((iter_num + 1) * size,
-                                                  len(node_list))]
-        val_nodes_mapping = list(map(self.id2idx2.get, val_nodes))
-        val_edges = [(n,n) for n in val_nodes_mapping]
+        val_nodes = node_list[iter_num * size:min((iter_num + 1) * size, len(node_list))]
+        val_nodes_mapping = list(map(self.idx2id.get, val_nodes))  # map idx to id
+        val_edges = [(n, n) for n in val_nodes_mapping]
         return self.val_batch_feed_dict(val_edges), (iter_num + 1) * size >= len(node_list), val_edges
 
     def label_val(self):
@@ -292,7 +289,7 @@ class EdgeMinibatchIterator(object):
         #        self.train_edges = np.random.permutation(self.train_edges)
         #        self.nodes = np.random.permutation(self.nodes)
         self.batch_num = 0
-        ppedge = (list(set(np.unique(self.all_edge_array[:,0])).union(set(np.unique(self.all_edge_array[:,1])))))  # all paper id
+        ppedge = (list(set(np.unique(self.all_edge_array[:,0])).union(set(np.unique(self.all_edge_array[:, 1])))))  # all paper id
         neg_size = 10  # default is 2
         sample_edge = np.random.choice(ppedge, (len(self.all_edge_array) * neg_size, 2))
 
