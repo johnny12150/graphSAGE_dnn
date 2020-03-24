@@ -35,7 +35,7 @@ flags.DEFINE_string("model_size", "big", "Can be big or small; model specific de
 flags.DEFINE_string('train_prefix', '', 'name of the object file that stores the training data. must be specified.')
 
 # left to default values in main experiments 
-flags.DEFINE_integer('epochs', 10, 'number of epochs to train.')
+flags.DEFINE_integer('epochs', 1, 'number of epochs to train.')
 flags.DEFINE_float('dropout', 0.0, 'dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 0.0, 'weight for l2 loss on embedding matrix.')
 flags.DEFINE_integer('max_degree', 100, 'maximum node degree.')
@@ -48,7 +48,7 @@ flags.DEFINE_integer('neg_sample_size', 20, 'number of negative samples')
 flags.DEFINE_integer('batch_size', 4096, 'minibatch size.')
 flags.DEFINE_integer('n2v_test_epochs', 1, 'Number of new SGD epochs for n2v.')
 flags.DEFINE_integer('identity_dim', 50, 'Set to positive value to use identity embedding features of that dimension. Default 0.')
-flags.DEFINE_boolean('node_pred', True, 'Which task to perform')
+flags.DEFINE_boolean('node_pred', False, 'Which task to perform')
 
 #logging, saving, validation settings etc.
 flags.DEFINE_boolean('save_embeddings', True, 'whether to save embeddings for all nodes after training')
@@ -125,21 +125,21 @@ def save_val_embeddings(sess, model, minibatch_iter, size, out_dir, mod=""):
     val_embeddings = []
     all_nodes = []
     finished = False
-#    seen = set([])
-    seen = []
+    seen = set([])
     nodes = []
     iter_num = 0
     name = "val"
     while not finished:
-        feed_dict_val, finished, edges = minibatch_iter.incremental_embed_feed_dict(size, iter_num) #size=256
+        feed_dict_val, finished, edges = minibatch_iter.incremental_embed_feed_dict(size, iter_num)  # size=256
         iter_num += 1
         outs_val = sess.run([model.outputs1], feed_dict=feed_dict_val)
-        #ONLY SAVE FOR embeds1 because of planetoid
+        # ONLY SAVE FOR embeds1 because of planetoid
         for i, edge in enumerate(edges):
-            all_nodes.append(edge[0])
-            val_embeddings.append(outs_val[-1][i,:])
-            nodes.append(edge[0])
-            seen.append(edge[0])
+            if not edge[0] in seen:
+                all_nodes.append(edge[0])
+                val_embeddings.append(outs_val[-1][i, :])
+                nodes.append(edge[0])
+                seen.add(edge[0])
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
