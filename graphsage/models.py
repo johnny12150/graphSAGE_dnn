@@ -1,13 +1,10 @@
 from collections import namedtuple
-
 import tensorflow as tf
 import math
-
 import graphsage.layers as layers
 import graphsage.metrics as metrics
 from graphsage.layers import Dense
 import numpy as np
-
 from .prediction import BipartiteEdgePredLayer
 from .aggregators import MeanAggregator, MaxPoolingAggregator, MeanPoolingAggregator, SeqAggregator, GCNAggregator
 
@@ -433,10 +430,7 @@ class SampleAndAggregate(GeneralizedModel):
             # 重算 loss, 手動給 neg的 loss比較小的 weight
             loss_logits = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.placeholders['labels'], logits=self.node_preds)
             loss_weights = tf.ones([tf.shape(self.node_preds)[0], 1], tf.float32)
-            # fixme 這是錯的
-            # loss_weights = tf.where(self.placeholders['labels'] == 0, loss_weights, loss_weights*0.1)
-            loss_weights = tf.where(tf.equal(self.placeholders['labels'], 0), loss_weights*10, loss_weights)
-
+            loss_weights = tf.where(tf.equal(self.placeholders['labels'], 1), loss_weights*100, loss_weights)
             self.loss += tf.reduce_mean(tf.multiply(loss_weights, loss_logits))
             self.predicted = tf.nn.sigmoid(self.node_preds)
             # positive sample accuracy
@@ -445,14 +439,27 @@ class SampleAndAggregate(GeneralizedModel):
             pos_ = tf.gather_nd(self.predicted, pos_index)  # select tensor by index
             pos_ans = tf.gather_nd(self.placeholders['labels'], pos_index)
             correct_pred = tf.equal(tf.round(pos_), pos_ans)
+            self.accuracy = []  # pos, neg, overall acc
+            self.accuracy.append(tf.reduce_mean(tf.cast(correct_pred, tf.float32)))
             # negative sample accuracy
-            # neg_ = tf.gather_nd(self.predicted, neg_index)
-            # neg_ans = tf.gather_nd(self.placeholders['labels'], neg_index)
-            # correct_pred = tf.equal(tf.round(neg_), neg_ans)
-            self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+            neg_ = tf.gather_nd(self.predicted, neg_index)
+            neg_ans = tf.gather_nd(self.placeholders['labels'], neg_index)
+            correct_pred = tf.equal(tf.round(neg_), neg_ans)
+            self.accuracy.append(tf.reduce_mean(tf.cast(correct_pred, tf.float32)))
+            # overall acc
+            correct_pred = tf.equal(tf.round(self.predicted), self.placeholders['labels'])
+            self.accuracy.append(tf.reduce_mean(tf.cast(correct_pred, tf.float32)))
 
-            # correct_pred = tf.equal(tf.round(self.predicted), self.placeholders['labels'])
-            # self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+            # 算 recall, precision
+            predicted = tf.round(self.predicted)
+            actual = self.placeholders['labels']
+            TP = tf.count_nonzero(predicted * actual)
+            TN = tf.count_nonzero((predicted - 1) * (actual - 1))
+            FP = tf.count_nonzero(predicted * (actual - 1))
+            FN = tf.count_nonzero((predicted - 1) * actual)
+            self.accuracy.append(TP / (TP + FP))  # precision
+            self.accuracy.append(TP / (TP + FN))  # recall
+
         else:
             # node prediction應該只有一組emb
             self.node_pred = Dense(100, 40)
@@ -461,10 +468,6 @@ class SampleAndAggregate(GeneralizedModel):
                 labels=self.placeholders['labels'],
                 logits=self.node_preds))
             self.predicted = tf.nn.softmax(self.node_preds)
-
-            # 這應該算錯
-            # ans = self.placeholders['labels']
-            # correct_pred = tf.cast(tf.math.argmax(self.predicted, 1) == tf.math.argmax(ans, 1), tf.int32)
 
             ans = tf.reshape(tf.math.argmax(self.placeholders['labels'], 1), [tf.shape(self.predicted)[0], -1])
             pred = tf.reshape(tf.math.argmax(self.predicted, 1), [tf.shape(self.predicted)[0], -1])

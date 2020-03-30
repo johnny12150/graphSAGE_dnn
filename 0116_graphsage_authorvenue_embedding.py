@@ -26,8 +26,7 @@ tf.set_random_seed(seed)
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-tf.app.flags.DEFINE_boolean('log_device_placement', False,
-                            """Whether to log device placement.""")
+tf.app.flags.DEFINE_boolean('log_device_placement', False, """Whether to log device placement.""")
 #core params..
 flags.DEFINE_string('model', 'graphsage_mean', 'model names. See README for possible values.')  
 flags.DEFINE_float('learning_rate', 0.001, 'initial learning rate.')
@@ -35,7 +34,7 @@ flags.DEFINE_string("model_size", "big", "Can be big or small; model specific de
 flags.DEFINE_string('train_prefix', '', 'name of the object file that stores the training data. must be specified.')
 
 # left to default values in main experiments 
-flags.DEFINE_integer('epochs', 1, 'number of epochs to train.')
+flags.DEFINE_integer('epochs', 20, 'number of epochs to train.')
 flags.DEFINE_float('dropout', 0.0, 'dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 0.0, 'weight for l2 loss on embedding matrix.')
 flags.DEFINE_integer('max_degree', 100, 'maximum node degree.')
@@ -88,7 +87,7 @@ os.environ["CUDA_VISIBLE_DEVICES"]=str(FLAGS.gpu)
 def load_data(prefix, normalize=True, load_walks=None, time_step=None, draw_G=True, save_fig='graph'):
 #    assert time_step != None, "load_data-- time_step can't None!"
     
-    all_edge = pd.read_pickle('all_edge.pkl')
+    all_edge = pd.read_pickle('all_edge_1y.pkl')
     # pv = pd.read_pickle('F:/volume/jicai/preprocess/edge/paper_venue.pkl')
     # 改成不考慮時間的 venue
     # pv = pv[pv['time_step'] < 284][['new_papr_id', 'new_venue_id']]
@@ -323,7 +322,7 @@ def train(train_data, test_data=None):
         while not minibatch.end():
             # Construct feed dictionary
             feed_dict, labels = minibatch.next_minibatch_feed_dict()
-#            feed_dict.update({placeholders['dropout']: FLAGS.dropout})
+            # feed_dict.update({placeholders['dropout']: FLAGS.dropout})
 
             t = time.time()
             # Training step
@@ -340,12 +339,13 @@ def train(train_data, test_data=None):
 #            else:
 #                train_shadow_mrr -= (1-0.99) * (train_shadow_mrr - train_mrr)
 
+        # todo 每個epoch算 MAP等
             if iter % FLAGS.validate_iter == 0:
                 feed_dict_val, labels_val = minibatch.val_shuffle()
                 outs_val = sess.run([model.loss, model.node_preds, model.placeholders['labels'], model.accuracy, model.predicted], feed_dict=feed_dict_val)
                 accuracy = outs_val[3]
-                true_value = outs_val[2][:10]
-                predicted_value = outs_val[4][:10]
+                # true_value = outs_val[2][:10]
+                # predicted_value = outs_val[4][:10]
                 loss = outs_val[0]
 
                  # Validation
@@ -360,21 +360,21 @@ def train(train_data, test_data=None):
 
             if total_steps % FLAGS.print_every == 0:
                 summary_writer.add_summary(outs[0], total_steps)
-    
-            # Print results
-            # avg_time = (avg_time * total_steps + time.time() - t) / (total_steps + 1)
+
             avg_time = time.time() - t
 
             if total_steps % FLAGS.print_every == 0:
 
                 print("Iter:", '%04d' % iter,
                       "train_loss=", "{:.5f}".format(train_cost),
-                      'train_acc=', "{:.5f}".format(train_acc),
-#                      "train_mrr=", "{:.5f}".format(train_mrr), 
-#                      "train_mrr_ema=", "{:.5f}".format(train_shadow_mrr), # exponential moving average
-#                      "val_loss=", "{:.5f}".format(val_cost),
-#                      "val_mrr=", "{:.5f}".format(val_mrr), 
-#                      "val_mrr_ema=", "{:.5f}".format(shadow_mrr), # exponential moving average
+                      'train_pos_acc=', "{:.5f}".format(train_acc[0]),
+                      'train_neg_acc=', "{:.5f}".format(train_acc[1]),
+                      'train_overall_acc=', "{:.5f}".format(train_acc[2]),
+                      # "train_mrr=", "{:.5f}".format(train_mrr),
+                      # "train_mrr_ema=", "{:.5f}".format(train_shadow_mrr), # exponential moving average
+                      # "val_loss=", "{:.5f}".format(val_cost),
+                      # "val_mrr=", "{:.5f}".format(val_mrr),
+                      # "val_mrr_ema=", "{:.5f}".format(shadow_mrr), # exponential moving average
                       "time=", "{:.5f}".format(avg_time))
 
             iter += 1
@@ -386,9 +386,12 @@ def train(train_data, test_data=None):
         if total_steps > FLAGS.max_total_steps:
             break
     
-        print('val_accuracy : ' + str(accuracy) + ' val_loss : ' + (str(loss)))
+        print('val_pos_accuracy : ' + str(accuracy[0]) + ' val_loss : ' + (str(loss)))
+        print('val_recall : ' + str(accuracy[4]) + ' val_precision : ' + (str(accuracy[3])))
         # print('true_value : ' + str(true_value.T))
         # print('predicted_value : ' + str(predicted_value.T))
+    # todo 畫 train, validation acc
+
     print("Optimization Finished!")
     all_vars = tf.trainable_variables()
     # save variable, https://blog.csdn.net/u012436149/article/details/56665612
