@@ -34,7 +34,7 @@ flags.DEFINE_string("model_size", "big", "Can be big or small; model specific de
 flags.DEFINE_string('train_prefix', '', 'name of the object file that stores the training data. must be specified.')
 
 # left to default values in main experiments 
-flags.DEFINE_integer('epochs', 20, 'number of epochs to train.')
+flags.DEFINE_integer('epochs', 10, 'number of epochs to train.')
 flags.DEFINE_float('dropout', 0.0, 'dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 0.0, 'weight for l2 loss on embedding matrix.')
 flags.DEFINE_integer('max_degree', 100, 'maximum node degree.')
@@ -84,19 +84,19 @@ os.environ["CUDA_VISIBLE_DEVICES"]=str(FLAGS.gpu)
 #walks = G.edges()
 #feats = None
 
-def load_data(prefix, normalize=True, load_walks=None, time_step=None, draw_G=True, save_fig='graph'):
+
+def load_data(prefix, normalize=True, load_walks=None, time_step=None, draw_G=True, save_fig='graph', time=281):
 #    assert time_step != None, "load_data-- time_step can't None!"
     
-    all_edge = pd.read_pickle('all_edge_1y.pkl')
-    # pv = pd.read_pickle('F:/volume/jicai/preprocess/edge/paper_venue.pkl')
-    # 改成不考慮時間的 venue
-    # pv = pv[pv['time_step'] < 284][['new_papr_id', 'new_venue_id']]
-    # all_edge = all_edge[all_edge['rel'].isin([0, 1])]
-    all_edge = all_edge[['head','tail']]
-    # all_edge = np.vstack((all_edge.values, pv.values))
+    all_edge = pd.read_pickle('all_edge.pkl')
+    # todo 用pp決定t時刻該有的edge
+    p_p = pd.read_pickle('paper_paper.pkl')
+    p_p_t = p_p[p_p['time_step'] <= time][['new_papr_id', 'new_cited_papr_id']].reset_index(drop=True)
+    all_edge = all_edge[all_edge['rel'] > 0][['head', 'tail']]
+    all_edge = np.vstack((p_p_t.values, all_edge.values))
 
     G = nx.DiGraph()
-    G.add_edges_from(all_edge.values)
+    G.add_edges_from(all_edge)
 
     id_map = dict(zip(G.nodes(), np.arange(len(G.nodes())))) 
     walks = G.edges()
@@ -339,7 +339,7 @@ def train(train_data, test_data=None):
 #            else:
 #                train_shadow_mrr -= (1-0.99) * (train_shadow_mrr - train_mrr)
 
-        # todo 每個epoch算 MAP等
+        # todo 每個epoch算簡易 MAP
             if iter % FLAGS.validate_iter == 0:
                 feed_dict_val, labels_val = minibatch.val_shuffle()
                 outs_val = sess.run([model.loss, model.node_preds, model.placeholders['labels'], model.accuracy, model.predicted], feed_dict=feed_dict_val)
@@ -390,7 +390,6 @@ def train(train_data, test_data=None):
         print('val_recall : ' + str(accuracy[4]) + ' val_precision : ' + (str(accuracy[3])))
         # print('true_value : ' + str(true_value.T))
         # print('predicted_value : ' + str(predicted_value.T))
-    # todo 畫 train, validation acc
 
     print("Optimization Finished!")
     all_vars = tf.trainable_variables()
@@ -414,60 +413,11 @@ def train(train_data, test_data=None):
 
         save_val_embeddings(sess, model, minibatch, FLAGS.validate_batch_size, 'author_venue_embedding')
 
-#        if FLAGS.model == "n2v":
-#            # stopping the gradient for the already trained nodes
-#            train_ids = tf.constant([[id_map[n]] for n in G.nodes_iter() if not G.node[n]['val'] and not G.node[n]['test']],
-#                    dtype=tf.int32)
-#            test_ids = tf.constant([[id_map[n]] for n in G.nodes_iter() if G.node[n]['val'] or G.node[n]['test']], 
-#                    dtype=tf.int32)
-#            update_nodes = tf.nn.embedding_lookup(model.context_embeds, tf.squeeze(test_ids))
-#            no_update_nodes = tf.nn.embedding_lookup(model.context_embeds,tf.squeeze(train_ids))
-#            update_nodes = tf.scatter_nd(test_ids, update_nodes, tf.shape(model.context_embeds))
-#            no_update_nodes = tf.stop_gradient(tf.scatter_nd(train_ids, no_update_nodes, tf.shape(model.context_embeds)))
-#            model.context_embeds = update_nodes + no_update_nodes
-#            sess.run(model.context_embeds)
-#
-#            # run random walks
-#            from graphsage.utils import run_random_walks
-#            nodes = [n for n in G.nodes_iter() if G.node[n]["val"] or G.node[n]["test"]]
-#            start_time = time.time()
-#            pairs = run_random_walks(G, nodes, num_walks=50)
-#            walk_time = time.time() - start_time
-#
-#            test_minibatch = EdgeMinibatchIterator(G, 
-#                id_map,
-#                placeholders, batch_size=FLAGS.batch_size,
-#                max_degree=FLAGS.max_degree, 
-#                num_neg_samples=FLAGS.neg_sample_size,
-#                context_pairs = pairs,
-#                n2v_retrain=True,
-#                fixed_n2v=True)
-#            
-#            start_time = time.time()
-#            print("Doing test training for n2v.")
-#            test_steps = 0
-#            for epoch in range(FLAGS.n2v_test_epochs):
-#                test_minibatch.shuffle()
-#                while not test_minibatch.end():
-#                    feed_dict = test_minibatch.next_minibatch_feed_dict()
-#                    feed_dict.update({placeholders['dropout']: FLAGS.dropout})
-#                    outs = sess.run([model.opt_op, model.loss, model.ranks, model.aff_all, 
-#                        model.mrr, model.outputs1], feed_dict=feed_dict)
-#                    if test_steps % FLAGS.print_every == 0:
-#                        print("Iter:", '%04d' % test_steps, 
-#                              "train_loss=", "{:.5f}".format(outs[1]),
-#                              "train_mrr=", "{:.5f}".format(outs[-2]))
-#                    test_steps += 1
-#            train_time = time.time() - start_time
-#            save_val_embeddings(sess, model, minibatch, FLAGS.validate_batch_size, log_dir(), mod="-test")
-#            print("Total time: ", train_time+walk_time)
-#            print("Walk time: ", walk_time)
-#            print("Train time: ", train_time)
-
 
 def main(argv=None):
+    # todo 根據時間產出不同的 pp/ rel=0
     print("Loading training data..")
-    train_data = load_data(FLAGS.train_prefix, load_walks=True)
+    train_data = load_data(FLAGS.train_prefix, load_walks=True, time=162)
     print("Done loading training data..")
     
     train(train_data)

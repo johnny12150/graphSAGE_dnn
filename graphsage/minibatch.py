@@ -40,12 +40,15 @@ class EdgeMinibatchIterator(object):
         self.batch_num = 0
         # self.labels = labels
         self.i = 0
-        self.all_edge = pd.read_pickle('all_edge.pkl')
+        # self.all_edge = pd.read_pickle('all_edge.pkl')
+        self.all_edge = pd.read_pickle('paper_paper.pkl')
         self.paper_venue = pd.read_pickle('paper_venue.pkl')
         self.node_classify = FLAGS.node_pred
         self.label_classes = self.paper_venue['new_venue_id'].unique()  # 43類
-        self.all_edge = self.all_edge[self.all_edge['rel'] == 0][['head', 'tail']]
-        self.all_edge_array = np.array(self.all_edge)
+        # self.all_edge = self.all_edge[self.all_edge['rel'] == 0][['head', 'tail']]
+        # self.all_edge_array = np.array(self.all_edge)
+        self.all_edge = self.all_edge[self.all_edge['time_step'] <= 162][['new_papr_id', 'new_cited_papr_id']].reset_index(drop=True)
+        self.all_edge_array = self.all_edge.values
 
         #        self.nodes = np.random.permutation(G.nodes())
         self.adj, self.deg = self.construct_adj()
@@ -193,6 +196,7 @@ class EdgeMinibatchIterator(object):
         batch_data[:, 1] = self.batch2_data
         batch_data_edge = set(map(tuple, batch_data))
 
+        # todo 改保留 validation的方式
         ppedge = (list(set(np.unique(self.all_edge_array[:, 0])).union(set(np.unique(self.all_edge_array[:, 1])))))
         sample_negative_edge = np.random.choice(ppedge, (4096, 2))
 
@@ -294,8 +298,8 @@ class EdgeMinibatchIterator(object):
         #        self.train_edges = np.random.permutation(self.train_edges)
         #        self.nodes = np.random.permutation(self.nodes)
         self.batch_num = 0
-        ppedge = (list(set(np.unique(self.all_edge_array[:,0])).union(set(np.unique(self.all_edge_array[:, 1])))))  # all paper id
-        neg_size = 2  # default is 2
+        ppedge = (list(set(np.unique(self.all_edge_array[:, 0])).union(set(np.unique(self.all_edge_array[:, 1])))))  # all paper id
+        neg_size = 100  # default is 2
         sample_edge = np.random.choice(ppedge, (len(self.all_edge_array) * neg_size, 2))
 
 #        sample_edge = np.random.randint(0,np.max(self.all_edge_array),(len(self.all_edge_array),2))

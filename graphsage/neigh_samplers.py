@@ -36,7 +36,7 @@ class UniformNeighborSampler(Layer):
 #        print(adj_lists.shape)
         adj_lists = tf.transpose(tf.random_shuffle(tf.transpose(adj_lists)))
         adj_lists = tf.slice(adj_lists, [0,0], [-1, num_samples])
-        print(adj_lists.shape)
+        # print(adj_lists.shape)
         return adj_lists
         '''
         第一次adj_lists的維度是(?,10)，第二次的維度是(20,10)

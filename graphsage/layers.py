@@ -83,8 +83,8 @@ class Dense(Layer):
         self.featureless = featureless
         self.bias = bias
         self.input_dim = input_dim
-        hidden_1_dim = 50
-        hidden_2_dim = 50
+        hidden_1_dim = 300
+        hidden_2_dim = 100
         self.hidden_1 = hidden_1_dim
         self.output_dim = output_dim
         
