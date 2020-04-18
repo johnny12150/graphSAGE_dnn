@@ -34,12 +34,14 @@ flags.DEFINE_string("model_size", "big", "Can be big or small; model specific de
 flags.DEFINE_string('train_prefix', '', 'name of the object file that stores the training data. must be specified.')
 
 # left to default values in main experiments 
-flags.DEFINE_integer('epochs', 10, 'number of epochs to train.')
+flags.DEFINE_integer('epochs', 20, 'number of epochs to train.')
 flags.DEFINE_float('dropout', 0.0, 'dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 0.0, 'weight for l2 loss on embedding matrix.')
 flags.DEFINE_integer('max_degree', 100, 'maximum node degree.')
 flags.DEFINE_integer('samples_1', 25, 'number of samples in layer 1')  # 2-hop neighbors
 flags.DEFINE_integer('samples_2', 10, 'number of users samples in layer 2')  # 1-hop neighbors
+flags.DEFINE_integer('neg_size', 100, 'default is 2')  # custom ones
+flags.DEFINE_integer('time_step', 100, 'default is 280')
 flags.DEFINE_integer('dim_1', 50, 'Size of output dim (final is 2x this, if using concat)')
 flags.DEFINE_integer('dim_2', 50, 'Size of output dim (final is 2x this, if using concat)')
 flags.DEFINE_boolean('random_context', False, 'Whether to use random context or direct edges')
@@ -49,7 +51,7 @@ flags.DEFINE_integer('n2v_test_epochs', 1, 'Number of new SGD epochs for n2v.')
 flags.DEFINE_integer('identity_dim', 50, 'Set to positive value to use identity embedding features of that dimension. Default 0.')
 flags.DEFINE_boolean('node_pred', False, 'Which task to perform')
 
-#logging, saving, validation settings etc.
+# logging, saving, validation settings etc.
 flags.DEFINE_boolean('save_embeddings', True, 'whether to save embeddings for all nodes after training')
 flags.DEFINE_string('base_log_dir', 'embedding', 'base directory for logging and saving embeddings')
 flags.DEFINE_integer('validate_iter', 500, "how often to run a validation minibatch.")
@@ -58,40 +60,17 @@ flags.DEFINE_integer('gpu', 0, "which gpu to use.")
 flags.DEFINE_integer('print_every', 100, "How often to print training info.")
 flags.DEFINE_integer('max_total_steps', 10000, "Maximum total number of iterations")
 
-os.environ["CUDA_VISIBLE_DEVICES"]=str(FLAGS.gpu)
-
-#%%
-#all_edge = pd.read_pickle('new_av')
-#all_edge = all_edge[['new_author_id','new_venue_year_id']]
-#all_edge_array = np.array(all_edge)
-#sample_edge = np.random.randint(0,np.max(all_edge_array),(1000000,2))
-#positive_edge = set(map(tuple, all_edge_array))
-#sample_negative_edge = set(map(tuple, sample_edge))
-#negative_edge = sample_negative_edge.difference(positive_edge)
-#
-#positive_edge_label = np.c_[all_edge_array, np.ones(len(all_edge_array))]
-#negative_edge_label = np.c_[np.array(list(negative_edge)), np.zeros(len(negative_edge))]
-#
-#data_edge = np.concatenate((positive_edge_label, negative_edge_label), axis=0)
-#np.random.shuffle(data_edge)
-#train_edge = data_edge[:, :2]
-#train_edge_label = data_edge[:, -1]
-
-#%%
-#G = nx.DiGraph()
-#G.add_edges_from(train_edge)
-#id_map = dict(zip(G.nodes(), np.arange(len(G.nodes())))) 
-#walks = G.edges()
-#feats = None
+os.environ["CUDA_VISIBLE_DEVICES"] = str(FLAGS.gpu)
 
 
+# todo dataloader 重新包裝
 def load_data(prefix, normalize=True, load_walks=None, time_step=None, draw_G=True, save_fig='graph', time=281):
-#    assert time_step != None, "load_data-- time_step can't None!"
-    
+    # assert time_step != None, "load_data-- time_step can't None!"
     all_edge = pd.read_pickle('all_edge.pkl')
-    # todo 用pp決定t時刻該有的edge
+    # 用pp決定t時刻該有的edge
     p_p = pd.read_pickle('paper_paper.pkl')
-    p_p_t = p_p[p_p['time_step'] <= time][['new_papr_id', 'new_cited_papr_id']].reset_index(drop=True)
+    p_p_t = p_p[p_p['time_step'] < time][['new_papr_id', 'new_cited_papr_id']].reset_index(drop=True)
+    # pv, pa只放到 time的
     all_edge = all_edge[all_edge['rel'] > 0][['head', 'tail']]
     all_edge = np.vstack((p_p_t.values, all_edge.values))
 
@@ -178,7 +157,7 @@ def construct_placeholders():
     }
     return placeholders
 
-#%%
+# %%
 def train(train_data, test_data=None):
     G = train_data[0]
     features = train_data[1]
@@ -203,6 +182,8 @@ def train(train_data, test_data=None):
             context_pairs = context_pairs)
     adj_info_ph = tf.placeholder(tf.int32, shape=minibatch.adj.shape)
     adj_info = tf.Variable(adj_info_ph, trainable=False, name="adj_info")
+
+    # todo 把舊的 model讀近來做 fine-tune
 
     if FLAGS.model == 'graphsage_mean':
         # Create model
@@ -290,7 +271,7 @@ def train(train_data, test_data=None):
 
     config = tf.ConfigProto(log_device_placement=FLAGS.log_device_placement)
     config.gpu_options.allow_growth = True
-    #config.gpu_options.per_process_gpu_memory_fraction = GPU_MEM_FRACTION
+    # config.gpu_options.per_process_gpu_memory_fraction = GPU_MEM_FRACTION
     config.allow_soft_placement = True
 
     # Initialize session
@@ -302,11 +283,6 @@ def train(train_data, test_data=None):
     sess.run(tf.global_variables_initializer(), feed_dict={adj_info_ph: minibatch.adj})
     
     # Train model
-    
-    train_shadow_mrr = None
-    shadow_mrr = None
-
-    avg_time = 0.0
     epoch_val_costs = []
 
     train_adj_info = tf.assign(adj_info, minibatch.adj)
@@ -339,7 +315,6 @@ def train(train_data, test_data=None):
 #            else:
 #                train_shadow_mrr -= (1-0.99) * (train_shadow_mrr - train_mrr)
 
-        # todo 每個epoch算簡易 MAP
             if iter % FLAGS.validate_iter == 0:
                 feed_dict_val, labels_val = minibatch.val_shuffle()
                 outs_val = sess.run([model.loss, model.node_preds, model.placeholders['labels'], model.accuracy, model.predicted], feed_dict=feed_dict_val)
@@ -347,16 +322,6 @@ def train(train_data, test_data=None):
                 # true_value = outs_val[2][:10]
                 # predicted_value = outs_val[4][:10]
                 loss = outs_val[0]
-
-                 # Validation
-#                sess.run(val_adj_info.op)
-#                val_cost, ranks, val_mrr, duration  = evaluate(sess, model, minibatch, size=FLAGS.validate_batch_size)
-#                sess.run(train_adj_info.op)
-#                epoch_val_costs[-1] += val_cost
-#            if shadow_mrr is None:
-#                shadow_mrr = val_mrr
-#            else:
-#                shadow_mrr -= (1-0.99) * (shadow_mrr - val_mrr)
 
             if total_steps % FLAGS.print_every == 0:
                 summary_writer.add_summary(outs[0], total_steps)
@@ -370,11 +335,6 @@ def train(train_data, test_data=None):
                       'train_pos_acc=', "{:.5f}".format(train_acc[0]),
                       'train_neg_acc=', "{:.5f}".format(train_acc[1]),
                       'train_overall_acc=', "{:.5f}".format(train_acc[2]),
-                      # "train_mrr=", "{:.5f}".format(train_mrr),
-                      # "train_mrr_ema=", "{:.5f}".format(train_shadow_mrr), # exponential moving average
-                      # "val_loss=", "{:.5f}".format(val_cost),
-                      # "val_mrr=", "{:.5f}".format(val_mrr),
-                      # "val_mrr_ema=", "{:.5f}".format(shadow_mrr), # exponential moving average
                       "time=", "{:.5f}".format(avg_time))
 
             iter += 1
@@ -417,7 +377,7 @@ def train(train_data, test_data=None):
 def main(argv=None):
     # todo 根據時間產出不同的 pp/ rel=0
     print("Loading training data..")
-    train_data = load_data(FLAGS.train_prefix, load_walks=True, time=162)
+    train_data = load_data(FLAGS.train_prefix, load_walks=True, time=280)
     print("Done loading training data..")
     
     train(train_data)
