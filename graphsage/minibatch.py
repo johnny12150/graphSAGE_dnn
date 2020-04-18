@@ -4,8 +4,7 @@ from __future__ import print_function
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import networkx as nx
-import random
+from dataloader import gen_edges
 np.random.seed(123)
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -40,14 +39,13 @@ class EdgeMinibatchIterator(object):
         self.batch_num = 0
         # self.labels = labels
         self.i = 0
-        # self.all_edge = pd.read_pickle('all_edge.pkl')
-        self.all_edge = pd.read_pickle('paper_paper.pkl')
+        self.all_edge = gen_edges(FLAGS.time_step)
+        # self.all_edge = pd.read_pickle('paper_paper.pkl')
         self.paper_venue = pd.read_pickle('paper_venue.pkl')
         self.node_classify = FLAGS.node_pred
         self.label_classes = self.paper_venue['new_venue_id'].unique()  # 43類
-        # self.all_edge = self.all_edge[self.all_edge['rel'] == 0][['head', 'tail']]
-        # self.all_edge_array = np.array(self.all_edge)
-        self.all_edge = self.all_edge[self.all_edge['time_step'] < 280][['new_papr_id', 'new_cited_papr_id']].reset_index(drop=True)
+        self.all_edge = self.all_edge[self.all_edge['rel'] == 0][['head', 'tail']]
+        # self.all_edge = self.all_edge[self.all_edge['time_step'] < 280][['new_papr_id', 'new_cited_papr_id']].reset_index(drop=True)
         self.all_edge_array = self.all_edge.values
 
         #        self.nodes = np.random.permutation(G.nodes())

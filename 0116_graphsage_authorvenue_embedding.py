@@ -15,7 +15,7 @@ from graphsage.neigh_samplers import UniformNeighborSampler
 import tensorflow as tf
 import os
 import time
-import random
+from dataloader import gen_edges
 
 #%%
 seed = 123
@@ -41,7 +41,7 @@ flags.DEFINE_integer('max_degree', 100, 'maximum node degree.')
 flags.DEFINE_integer('samples_1', 25, 'number of samples in layer 1')  # 2-hop neighbors
 flags.DEFINE_integer('samples_2', 10, 'number of users samples in layer 2')  # 1-hop neighbors
 flags.DEFINE_integer('neg_size', 100, 'default is 2')  # custom ones
-flags.DEFINE_integer('time_step', 100, 'default is 280')
+flags.DEFINE_integer('time_step', 280, 'default is 280')
 flags.DEFINE_integer('dim_1', 50, 'Size of output dim (final is 2x this, if using concat)')
 flags.DEFINE_integer('dim_2', 50, 'Size of output dim (final is 2x this, if using concat)')
 flags.DEFINE_boolean('random_context', False, 'Whether to use random context or direct edges')
@@ -63,16 +63,17 @@ flags.DEFINE_integer('max_total_steps', 10000, "Maximum total number of iteratio
 os.environ["CUDA_VISIBLE_DEVICES"] = str(FLAGS.gpu)
 
 
-# todo dataloader 重新包裝
 def load_data(prefix, normalize=True, load_walks=None, time_step=None, draw_G=True, save_fig='graph', time=281):
     # assert time_step != None, "load_data-- time_step can't None!"
-    all_edge = pd.read_pickle('all_edge.pkl')
-    # 用pp決定t時刻該有的edge
-    p_p = pd.read_pickle('paper_paper.pkl')
-    p_p_t = p_p[p_p['time_step'] < time][['new_papr_id', 'new_cited_papr_id']].reset_index(drop=True)
-    # pv, pa只放到 time的
-    all_edge = all_edge[all_edge['rel'] > 0][['head', 'tail']]
-    all_edge = np.vstack((p_p_t.values, all_edge.values))
+    # all_edge = pd.read_pickle('all_edge.pkl')
+    # # 用pp決定t時刻該有的edge
+    # p_p = pd.read_pickle('paper_paper.pkl')
+    # p_p_t = p_p[p_p['time_step'] < time][['new_papr_id', 'new_cited_papr_id']].reset_index(drop=True)
+    # # pv, pa只放到 time的
+    # all_edge = all_edge[all_edge['rel'] > 0][['head', 'tail']]
+    # all_edge = np.vstack((p_p_t.values, all_edge.values))
+
+    all_edge = gen_edges(time)[['head', 'tail']].values
 
     G = nx.DiGraph()
     G.add_edges_from(all_edge)
