@@ -37,7 +37,7 @@ def gen_edges(target_rank, save=False):
     venue_year['new_venue_year_id'] = np.arange(last_pv_id,last_pv_id+len(venue_year))
     paper_venue_year = pd.merge(data,venue_year)[['new_papr_id','new_venue_year_id','time_step']]
     paper_venue_year = paper_venue_year.reset_index(drop=True)
-    #origin_venue = p_v['new_venue_id'].copy().drop_duplicates()
+    # origin_venue = p_v['new_venue_id'].copy().drop_duplicates()
 
     '''paper發在哪一年的哪個venue裡面，2018KDD和2019KDD是兩個不同的venue'''
     p_vy = paper_venue_year.copy()
@@ -213,7 +213,7 @@ def gen_edges(target_rank, save=False):
 
     #pp
     '''paper cite paper的關係'''
-    pp = p_p[p_p['time_step']<target_rank][['new_papr_id','new_cited_papr_id']]
+    pp = p_p[p_p['time_step']<target_rank-1][['new_papr_id','new_cited_papr_id']]
     pp = pp.reset_index(drop=True)
     rel = pd.DataFrame(np.zeros(len(pp)))
     pp = pd.concat((pp,rel),axis=1)
@@ -227,7 +227,7 @@ def gen_edges(target_rank, save=False):
     all_edge = all_edge.reset_index(drop=True)
 
     if save:
-        with open('all_edge.pkl', 'wb') as file:
+        with open('all_edge_'+str(target_rank)+'.pkl', 'wb') as file:
             pickle.dump(all_edge, file)
 
     # map to new id

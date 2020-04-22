@@ -15,7 +15,9 @@ from graphsage.neigh_samplers import UniformNeighborSampler
 import tensorflow as tf
 import os
 import time
+import sys
 from dataloader import gen_edges
+from tensorflow.python.platform import flags
 
 #%%
 seed = 123
@@ -34,7 +36,7 @@ flags.DEFINE_string("model_size", "big", "Can be big or small; model specific de
 flags.DEFINE_string('train_prefix', '', 'name of the object file that stores the training data. must be specified.')
 
 # left to default values in main experiments 
-flags.DEFINE_integer('epochs', 20, 'number of epochs to train.')
+flags.DEFINE_integer('epochs', 1, 'number of epochs to train.')
 flags.DEFINE_float('dropout', 0.0, 'dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 0.0, 'weight for l2 loss on embedding matrix.')
 flags.DEFINE_integer('max_degree', 100, 'maximum node degree.')
@@ -65,18 +67,23 @@ os.environ["CUDA_VISIBLE_DEVICES"] = str(FLAGS.gpu)
 
 def load_data(prefix, normalize=True, load_walks=None, time_step=None, draw_G=True, save_fig='graph', time=281):
     # assert time_step != None, "load_data-- time_step can't None!"
-    # all_edge = pd.read_pickle('all_edge.pkl')
-    # # 用pp決定t時刻該有的edge
-    # p_p = pd.read_pickle('paper_paper.pkl')
-    # p_p_t = p_p[p_p['time_step'] < time][['new_papr_id', 'new_cited_papr_id']].reset_index(drop=True)
-    # # pv, pa只放到 time的
-    # all_edge = all_edge[all_edge['rel'] > 0][['head', 'tail']]
-    # all_edge = np.vstack((p_p_t.values, all_edge.values))
 
-    all_edge = gen_edges(time)[['head', 'tail']].values
+    # rolling到321時全部的node
+    all_edges = gen_edges(322)[['head', 'tail']].values
+    all_edges = np.unique(all_edges.flatten())
 
+    # t時刻該有的edges
+    all_edge = gen_edges(time+1)[['head', 'tail']].values
+    # gen_edges(time, True)  # for testing purpose
+
+    # 建一張空表有全部 node
     G = nx.DiGraph()
     G.add_edges_from(all_edge)
+    # 補齊剩下缺少的 nodes
+    t_nodes = np.unique(all_edge.flatten())
+    missing_nodes = np.setdiff1d(all_edges, t_nodes)
+    # 手動把缺少的加進G
+    G.add_nodes_from(missing_nodes)
 
     id_map = dict(zip(G.nodes(), np.arange(len(G.nodes())))) 
     walks = G.edges()
@@ -124,9 +131,9 @@ def save_val_embeddings(sess, model, minibatch_iter, size, out_dir, mod=""):
         os.makedirs(out_dir)
     val_embeddings = np.vstack(val_embeddings)
 
-    np.save(out_dir + '/emb_node.npy', np.array(nodes))
+    np.save(out_dir + '/emb_node' + str(FLAGS.time_step) + '.npy', np.array(nodes))
 #    np.save(out_dir + name + mod + ".npy",  val_embeddings)
-    np.save(out_dir + '/embedding.npy',  val_embeddings)
+    np.save(out_dir + '/embedding' + str(FLAGS.time_step) + '.npy',  val_embeddings)
 #    with open(out_dir + name + mod + ".txt", "w") as fp:
 #        print('------------------------------')
 #        fp.write("\n".join(map(str,nodes)))
@@ -183,8 +190,6 @@ def train(train_data, test_data=None):
             context_pairs = context_pairs)
     adj_info_ph = tf.placeholder(tf.int32, shape=minibatch.adj.shape)
     adj_info = tf.Variable(adj_info_ph, trainable=False, name="adj_info")
-
-    # todo 把舊的 model讀近來做 fine-tune
 
     if FLAGS.model == 'graphsage_mean':
         # Create model
@@ -277,11 +282,14 @@ def train(train_data, test_data=None):
 
     # Initialize session
     sess = tf.Session(config=config)
+    saver = tf.train.Saver()
     merged = tf.summary.merge_all()
     summary_writer = tf.summary.FileWriter(log_dir(), sess.graph)
      
     # Init variables
     sess.run(tf.global_variables_initializer(), feed_dict={adj_info_ph: minibatch.adj})
+    # todo 把舊的 model讀近來做 fine-tune
+    saver.restore(sess, "./model_output/model")
     
     # Train model
     epoch_val_costs = []
@@ -306,9 +314,9 @@ def train(train_data, test_data=None):
             # outs = sess.run([merged, model.opt_op, model.loss, model.ranks, model.aff_all, model.mrr, model.outputs1], feed_dict=feed_dict)
             outs = sess.run([merged, model.opt_op, model.loss, model.grad, model.node_preds, model.placeholders['labels'], model.outputs1, model.accuracy], feed_dict=feed_dict)
             train_cost = outs[2]
-            grad = outs[3]
-            node_pres = outs[4]
-            label = outs[5]
+            # grad = outs[3]
+            # node_pres = outs[4]
+            # label = outs[5]
             train_acc = outs[7]
 #            train_tmrr = outs[5]
 #            if train_shadow_mrr is None:
@@ -355,11 +363,16 @@ def train(train_data, test_data=None):
     print("Optimization Finished!")
     all_vars = tf.trainable_variables()
     # save variable, https://blog.csdn.net/u012436149/article/details/56665612
-    dense_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='dense_1_vars')
+    # dense_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='dense_1_vars')
     # saver = tf.train.Saver(all_vars[5:])
+
     # save model
-    saver = tf.train.Saver()
-    saver.save(sess, "./model_output/model")  # save entire model/ session
+    # saver = tf.train.Saver()
+    directory = "./rolling_models/" + str(FLAGS.time_step)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    # saver.save(sess, "./rolling_models/" + str(FLAGS.time_step) + "/model")  # save entire model/ session
+    saver.save(sess, "./model_output/model")
 
     # print(all_vars[5:])
     # print(dense_vars)
@@ -371,17 +384,25 @@ def train(train_data, test_data=None):
 
     if FLAGS.save_embeddings:
         sess.run(val_adj_info.op)
-
         save_val_embeddings(sess, model, minibatch, FLAGS.validate_batch_size, 'author_venue_embedding')
+
+    # sess.close()
+    # tf.reset_default_graph()
 
 
 def main(argv=None):
-    # todo 根據時間產出不同的 pp/ rel=0
-    print("Loading training data..")
-    train_data = load_data(FLAGS.train_prefix, load_walks=True, time=280)
-    print("Done loading training data..")
-    
-    train(train_data)
+    times = [284, 302, 307, 310, 318, 321]
+    for t in times:
+        FLAGS.time_step = t
+        print("Loading training data..")
+        train_data = load_data(FLAGS.train_prefix, load_walks=True, time=t)
+        print("Done loading training data..")
+
+        train(train_data)
 
 if __name__ == '__main__':
-    tf.app.run()
+    # tf.app.run()
+    flags_passthrough = flags.FLAGS.flag_values_dict()
+    main = main or sys.modules['__main__'].main
+    main(flags_passthrough)
+

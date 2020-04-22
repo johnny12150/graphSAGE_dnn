@@ -68,7 +68,7 @@ class EdgeMinibatchIterator(object):
         #            else:
         #                self.train_edges = self.val_edges = self.edges
 
-        print(len([n for n in G.nodes]), 'train nodes')
+        # print(len([n for n in G.nodes]), 'train nodes')
         # if not G.node[n]['test'] and not G.node[n]['val']]), 'train nodes')
         # print(len([n for n in G.nodes() if G.node[n]['test'] or G.node[n]['val']]), 'test nodes')
 
