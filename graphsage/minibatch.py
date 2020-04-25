@@ -194,7 +194,7 @@ class EdgeMinibatchIterator(object):
         batch_data[:, 1] = self.batch2_data
         batch_data_edge = set(map(tuple, batch_data))
 
-        # todo 改保留 validation的方式
+        # todo positive的 sample來自 test的時間
         ppedge = (list(set(np.unique(self.all_edge_array[:, 0])).union(set(np.unique(self.all_edge_array[:, 1])))))
         sample_negative_edge = np.random.choice(ppedge, (4096, 2))
 
@@ -296,19 +296,24 @@ class EdgeMinibatchIterator(object):
         #        self.train_edges = np.random.permutation(self.train_edges)
         #        self.nodes = np.random.permutation(self.nodes)
         self.batch_num = 0
-        ppedge = (list(set(np.unique(self.all_edge_array[:, 0])).union(set(np.unique(self.all_edge_array[:, 1])))))  # all paper id
+        # ppedge = (list(set(np.unique(self.all_edge_array[:, 0])).union(set(np.unique(self.all_edge_array[:, 1])))))  # all paper id
+        self.ppedge = gen_edges(FLAGS.time_step, pp_only=True)[['head', 'tail']].values
+        ppedge = np.unique(self.ppedge.flatten())
         neg_size = FLAGS.neg_size  # default is 2
         sample_edge = np.random.choice(ppedge, (len(self.all_edge_array) * neg_size, 2))
 
-#        sample_edge = np.random.randint(0,np.max(self.all_edge_array),(len(self.all_edge_array),2))
-#        sample_edge = np.load('sample_edge.npy')
-        self.positive_edge = set(map(tuple, self.all_edge_array))
+        # self.positive_edge = set(map(tuple, self.all_edge_array))
+        # self.sample_negative_edge = set(map(tuple, sample_edge))
+        # self.negative_edge = self.sample_negative_edge.difference(self.positive_edge)
+        self.positive_edge = set(map(tuple, self.ppedge))
         self.sample_negative_edge = set(map(tuple, sample_edge))
         self.negative_edge = self.sample_negative_edge.difference(self.positive_edge)
 
         if not self.node_classify:
             # assign true/ false, edge list + label, id還沒轉成idx
-            self.positive_edge_label = np.c_[self.all_edge_array, np.ones(len(self.all_edge_array))]
+            # self.positive_edge_label = np.c_[self.all_edge_array, np.ones(len(self.all_edge_array))]
+
+            self.positive_edge_label = np.c_[self.ppedge, np.ones(len(self.ppedge))]
             self.negative_edge_label = np.c_[np.array(list(self.negative_edge)), np.zeros(len(self.negative_edge))]
             self.data_edge = np.concatenate((self.positive_edge_label, self.negative_edge_label), axis=0)
             np.random.shuffle(self.data_edge)

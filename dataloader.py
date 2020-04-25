@@ -13,7 +13,7 @@ from tqdm import tqdm
 tqdm.pandas()
 
 
-def gen_edges(target_rank, save=False):
+def gen_edges(target_rank, save=False, pp_only=False):
     p_p = pd.read_pickle('paper_paper.pkl')
     p_v = pd.read_pickle('paper_venue.pkl')
     p_a = pd.read_pickle('paper_author.pkl')
@@ -213,11 +213,16 @@ def gen_edges(target_rank, save=False):
 
     #pp
     '''paper cite paper的關係'''
-    pp = p_p[p_p['time_step']<target_rank-1][['new_papr_id','new_cited_papr_id']]
+    if pp_only:
+        pp = p_p[p_p['time_step'] == target_rank][['new_papr_id', 'new_cited_papr_id']]
+    else:
+        pp = p_p[p_p['time_step'] < target_rank-1][['new_papr_id', 'new_cited_papr_id']]
     pp = pp.reset_index(drop=True)
     rel = pd.DataFrame(np.zeros(len(pp)))
     pp = pd.concat((pp,rel),axis=1)
     pp.columns = ['head', 'tail', 'rel']
+    if pp_only:
+        return pp
 
     # edge list
     # all_edge = pd.concat([pp,pa,ph,pnew,pself,psurvey,pk,vyv,pvy])

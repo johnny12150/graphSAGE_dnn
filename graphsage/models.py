@@ -357,18 +357,6 @@ class SampleAndAggregate(GeneralizedModel):
         return hidden[0], aggregators
 
     def _build(self):
-#        labels = tf.reshape(
-#                tf.cast(self.placeholders['batch2'], dtype=tf.int64),
-#                [self.batch_size, 1])
-#        self.neg_samples, _, _ = (tf.nn.fixed_unigram_candidate_sampler(
-#            true_classes=labels,
-#            num_true=1,
-#            num_sampled=FLAGS.neg_sample_size,
-#            unique=False,
-#            range_max=len(self.degrees),
-#            distortion=0.75,
-#            unigrams=self.degrees.tolist()))
-
         # perform "convolution", 這裡的 input是 idx
         samples1, support_sizes1 = self.sample(self.inputs1, self.layer_infos)  # node itself
         samples2, support_sizes2 = self.sample(self.inputs2, self.layer_infos)  # neighbor
@@ -380,18 +368,7 @@ class SampleAndAggregate(GeneralizedModel):
         self.outputs1, self.aggregators = self.aggregate(samples1, [self.features], self.dims, num_samples, support_sizes1, concat=self.concat, model_size=self.model_size)
         self.outputs2, _ = self.aggregate(samples2, [self.features], self.dims, num_samples, support_sizes2, aggregators=self.aggregators, concat=self.concat, model_size=self.model_size)
 
-#        neg_samples, neg_support_sizes = self.sample(self.neg_samples, self.layer_infos,
-#            FLAGS.neg_sample_size)
-        
-#        self.neg_outputs, _ = self.aggregate(neg_samples, [self.features], self.dims, num_samples,
-#                neg_support_sizes, batch_size=FLAGS.neg_sample_size, aggregators=self.aggregators,
-#                concat=self.concat, model_size=self.model_size)
-
         dim_mult = 2 if self.concat else 1
-#        self.link_pred_layer = BipartiteEdgePredLayer(dim_mult*self.dims[-1],
-#                dim_mult*self.dims[-1], self.placeholders, act=tf.nn.sigmoid, loss_fn='citation',
-#                bilinear_weights=False,
-#                name='edge_predict')
 
         self.outputs1 = tf.nn.l2_normalize(self.outputs1, 1)
         self.outputs2 = tf.nn.l2_normalize(self.outputs2, 1)

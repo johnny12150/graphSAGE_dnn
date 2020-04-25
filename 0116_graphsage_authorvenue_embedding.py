@@ -288,8 +288,8 @@ def train(train_data, test_data=None):
      
     # Init variables
     sess.run(tf.global_variables_initializer(), feed_dict={adj_info_ph: minibatch.adj})
-    # todo 把舊的 model讀近來做 fine-tune
-    saver.restore(sess, "./model_output/model")
+    # 把舊的 model讀近來做 fine-tune
+    # saver.restore(sess, "./model_output/model")
     
     # Train model
     epoch_val_costs = []
@@ -303,7 +303,7 @@ def train(train_data, test_data=None):
         iter = 0
         print('Epoch: %04d' % (epoch + 1))
         epoch_val_costs.append(0)
-        print(minibatch.end())
+
         while not minibatch.end():
             # Construct feed dictionary
             feed_dict, labels = minibatch.next_minibatch_feed_dict()
@@ -319,10 +319,6 @@ def train(train_data, test_data=None):
             # label = outs[5]
             train_acc = outs[7]
 #            train_tmrr = outs[5]
-#            if train_shadow_mrr is None:
-#                train_shadow_mrr = train_mrr#
-#            else:
-#                train_shadow_mrr -= (1-0.99) * (train_shadow_mrr - train_mrr)
 
             if iter % FLAGS.validate_iter == 0:
                 feed_dict_val, labels_val = minibatch.val_shuffle()
