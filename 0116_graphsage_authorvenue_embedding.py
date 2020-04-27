@@ -36,13 +36,13 @@ flags.DEFINE_string("model_size", "big", "Can be big or small; model specific de
 flags.DEFINE_string('train_prefix', '', 'name of the object file that stores the training data. must be specified.')
 
 # left to default values in main experiments 
-flags.DEFINE_integer('epochs', 1, 'number of epochs to train.')
+flags.DEFINE_integer('epochs', 10, 'number of epochs to train.')
 flags.DEFINE_float('dropout', 0.0, 'dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 0.0, 'weight for l2 loss on embedding matrix.')
 flags.DEFINE_integer('max_degree', 100, 'maximum node degree.')
 flags.DEFINE_integer('samples_1', 25, 'number of samples in layer 1')  # 2-hop neighbors
 flags.DEFINE_integer('samples_2', 10, 'number of users samples in layer 2')  # 1-hop neighbors
-flags.DEFINE_integer('neg_size', 100, 'default is 2')  # custom ones
+flags.DEFINE_integer('neg_size', 10, 'default is 2')  # custom ones
 flags.DEFINE_integer('time_step', 280, 'default is 280')
 flags.DEFINE_integer('dim_1', 50, 'Size of output dim (final is 2x this, if using concat)')
 flags.DEFINE_integer('dim_2', 50, 'Size of output dim (final is 2x this, if using concat)')
@@ -387,7 +387,8 @@ def train(train_data, test_data=None):
 
 
 def main(argv=None):
-    times = [284, 302, 307, 310, 318, 321]
+    # times = [284, 302, 307, 310, 318, 321]
+    times = [284]
     for t in times:
         FLAGS.time_step = t
         print("Loading training data..")

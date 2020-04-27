@@ -198,7 +198,7 @@ class EdgeMinibatchIterator(object):
         ppedge = (list(set(np.unique(self.all_edge_array[:, 0])).union(set(np.unique(self.all_edge_array[:, 1])))))
         sample_negative_edge = np.random.choice(ppedge, (4096, 2))
 
-#        sample_negative_edge = np.random.randint(0,np.max(self.all_edge_array),(4096,2))
+        # sample_negative_edge = np.random.randint(0,np.max(self.all_edge_array),(4096,2))
         idx = np.random.randint(len(self.all_edge_array), size=4096)
 
         sample_positive_edge = self.all_edge_array[idx, :]
@@ -298,6 +298,8 @@ class EdgeMinibatchIterator(object):
         self.batch_num = 0
         # ppedge = (list(set(np.unique(self.all_edge_array[:, 0])).union(set(np.unique(self.all_edge_array[:, 1])))))  # all paper id
         self.ppedge = gen_edges(FLAGS.time_step, pp_only=True)[['head', 'tail']].values
+        train_nums = int(round(len(self.ppedge) * 0.8))  # 保留一部分當 validation
+        self.ppedge = self.ppedge[:train_nums]
         ppedge = np.unique(self.ppedge.flatten())
         neg_size = FLAGS.neg_size  # default is 2
         sample_edge = np.random.choice(ppedge, (len(self.all_edge_array) * neg_size, 2))
